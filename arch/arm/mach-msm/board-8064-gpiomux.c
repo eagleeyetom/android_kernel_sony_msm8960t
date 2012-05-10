@@ -1552,6 +1552,18 @@ static struct gpiomux_setting gsbi4_uartdm_suspended = {
 	.pull = GPIOMUX_PULL_DOWN,
 };
 
+static struct gpiomux_setting gsbi6_uartdm_active = {
+	.func = GPIOMUX_FUNC_2,
+	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct gpiomux_setting gsbi6_uartdm_suspended = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_DOWN,
+};
+
 static struct msm_gpiomux_config apq8064_uartdm_gsbi4_configs[] __initdata = {
 	{
 		.gpio      = 11,        /* GSBI4 UARTDM RX */
@@ -1579,6 +1591,37 @@ static struct msm_gpiomux_config apq8064_uartdm_gsbi4_configs[] __initdata = {
 		.settings = {
 			[GPIOMUX_ACTIVE] = &gsbi4_uartdm_active,
 			[GPIOMUX_SUSPENDED] = &gsbi4_uartdm_suspended,
+		},
+	},
+};
+
+static struct msm_gpiomux_config mpq8064_uartdm_configs[] __initdata = {
+	{ /* UARTDM_TX */
+		.gpio      = 14,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &gsbi6_uartdm_active,
+			[GPIOMUX_SUSPENDED] = &gsbi6_uartdm_suspended,
+		},
+	},
+	{ /* UARTDM_RX */
+		.gpio      = 15,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &gsbi6_uartdm_active,
+			[GPIOMUX_SUSPENDED] = &gsbi6_uartdm_suspended,
+		},
+	},
+	{ /* UARTDM_CTS */
+		.gpio      = 16,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &gsbi6_uartdm_active,
+			[GPIOMUX_SUSPENDED] = &gsbi6_uartdm_suspended,
+		},
+	},
+	{ /* UARTDM_RFR */
+		.gpio      = 17,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &gsbi6_uartdm_active,
+			[GPIOMUX_SUSPENDED] = &gsbi6_uartdm_suspended,
 		},
 	},
 };
