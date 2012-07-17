@@ -1489,7 +1489,6 @@ static int msm_rotator_start(unsigned long arg,
 	unsigned int dst_w, dst_h;
 	unsigned int is_planar420 = 0;
 	int fast_yuv_en = 0;
-	u32 perf_level;
 
 	if (copy_from_user(&info, (void __user *)arg, sizeof(info)))
 		return -EFAULT;
@@ -1523,39 +1522,22 @@ static int msm_rotator_start(unsigned long arg,
 	switch (info.src.format) {
 	case MDP_Y_CB_CR_H2V2:
 	case MDP_Y_CR_CB_H2V2:
-	/* To support Movie Studio, the following line needs to be removed */
-	/* case MDP_Y_CR_CB_GH2V2: */
+	case MDP_Y_CR_CB_GH2V2:
 		is_planar420 = 1;
 	case MDP_Y_CBCR_H2V2:
 	case MDP_Y_CRCB_H2V2:
 	case MDP_Y_CRCB_H2V2_TILE:
 	case MDP_Y_CBCR_H2V2_TILE:
-		if (rotator_hw_revision >= ROTATOR_REVISION_V2) {
-
-			if (!info.downscale_ratio) {
-				fast_yuv_en = !fast_yuv_invalid_size_checker(
-							     info.rotations,
-							     info.src.width,
-							     dst_w,
-							     dst_h,
-							     dst_w,
-							     is_planar420);
-			} else if ((info.src.width == 1920) &&
-				   (info.downscale_ratio == 1) &&
-				   (!info.rotations)) {
-				/*
-				 * Also allow fast_yuv when down scaling
-				 * 1080p to 720p without rotations
-				 */
-				fast_yuv_en = !fast_yuv_invalid_size_checker(
-							     info.rotations,
-							     info.src.width,
-							     info.dst.width,
-							     info.dst.height,
-							     info.dst.width,
-							     is_planar420);
-			}
-		}
+		if (rotator_hw_revision >= ROTATOR_REVISION_V2 &&
+			!(info.downscale_ratio &&
+			(info.rotations & MDP_ROT_90)))
+			fast_yuv_en = !fast_yuv_invalid_size_checker(
+						info.rotations,
+						info.src.width,
+						dst_w,
+						dst_h,
+						dst_w,
+						is_planar420);
 	break;
 	default:
 		fast_yuv_en = 0;
