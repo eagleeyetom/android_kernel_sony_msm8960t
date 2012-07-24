@@ -479,6 +479,15 @@ static int slim_register_controller(struct slim_controller *ctrl)
 	ctrl->wq = create_singlethread_workqueue(dev_name(&ctrl->dev));
 	if (!ctrl->wq)
 		goto err_workq_failed;
+	/*
+	 * If devices on a controller were registered before controller,
+	 * this will make sure that they get probed now that controller is up
+	 */
+	mutex_lock(&board_lock);
+	list_add_tail(&ctrl->list, &slim_ctrl_list);
+	list_for_each_entry(bi, &board_list, list)
+		slim_match_ctrl_to_boardinfo(ctrl, &bi->board_info);
+	mutex_unlock(&board_lock);
 
 	return 0;
 
