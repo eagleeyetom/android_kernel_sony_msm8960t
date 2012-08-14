@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -295,6 +295,18 @@ static int32_t pm8xxx_adc_patherm_power(bool on)
 	return rc;
 }
 
+static int32_t pm8xxx_adc_xo_vote(bool on)
+{
+	struct pm8xxx_adc *adc_pmic = pmic_adc;
+
+	if (on)
+		msm_xo_mode_vote(adc_pmic->adc_voter, MSM_XO_MODE_ON);
+	else
+		msm_xo_mode_vote(adc_pmic->adc_voter, MSM_XO_MODE_OFF);
+
+	return 0;
+}
+
 static int32_t pm8xxx_adc_channel_power_enable(uint32_t channel,
 							bool power_cntrl)
 {
@@ -306,8 +318,7 @@ static int32_t pm8xxx_adc_channel_power_enable(uint32_t channel,
 		break;
 	case CHANNEL_DIE_TEMP:
 	case CHANNEL_MUXOFF:
-		usleep_range(PM8XXX_ADC_SETTLE_TIME_MIN_TEST,
-					PM8XXX_ADC_SETTLE_TIME_MAX_TEST);
+		rc = pm8xxx_adc_xo_vote(power_cntrl);
 		break;
 	default:
 		break;
