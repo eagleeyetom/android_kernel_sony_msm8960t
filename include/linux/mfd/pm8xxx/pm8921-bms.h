@@ -1,5 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
- * Copyright (C) 2012 Sony Mobile Communications AB.
+/* Copyright (c) 2011-2013, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,7 +14,6 @@
 #define __PM8XXX_BMS_H
 
 #include <linux/errno.h>
-#include <linux/types.h>
 #include <linux/mfd/pm8xxx/batterydata-lib.h>
 
 #define PM8921_BMS_DEV_NAME	"pm8921-bms"
@@ -27,12 +25,6 @@ struct pm8xxx_bms_core_data {
 	unsigned int	ref625mv_channel;
 	unsigned int	ref1p25v_channel;
 	unsigned int	batt_id_channel;
-};
-
-enum battery_type {
-	BATT_UNKNOWN = 0,
-	BATT_PALLADIUM,
-	BATT_DESAY,
 };
 
 /**
@@ -53,7 +45,6 @@ enum battery_type {
 struct pm8921_bms_platform_data {
 	struct pm8xxx_bms_core_data	bms_cdata;
 	enum battery_type		battery_type;
-	struct bms_battery_data		*battery_data;
 	int				r_sense_uohm;
 	unsigned int			i_test;
 	unsigned int			v_cutoff;
@@ -64,11 +55,11 @@ struct pm8921_bms_platform_data {
 	int				ignore_shutdown_soc;
 	int				adjust_soc_low_threshold;
 	int				chg_term_ua;
+	int				normal_voltage_calc_ms;
+	int				low_voltage_calc_ms;
 };
 
 #if defined(CONFIG_PM8921_BMS) || defined(CONFIG_PM8921_BMS_MODULE)
-extern struct pm8921_bms_battery_data  palladium_1500_data;
-extern struct pm8921_bms_battery_data  desay_5200_data;
 /**
  * pm8921_bms_get_vsense_avg - return the voltage across the sense
  *				resitor in microvolts
@@ -138,9 +129,11 @@ void pm8921_bms_calibrate_hkadc(void);
 int pm8921_bms_get_simultaneous_battery_voltage_and_current(int *ibat_ua,
 								int *vbat_uv);
 /**
- * pm8921_bms_get_rbatt - function to get the battery resistance in mOhm.
+ * pm8921_bms_get_current_max
+ *	- function to get the max current that can be drawn from
+ *	  the battery before it dips below the min allowed voltage
  */
-int pm8921_bms_get_rbatt(void);
+int pm8921_bms_get_current_max(void);
 /**
  * pm8921_bms_invalidate_shutdown_soc - function to notify the bms driver that
  *					the battery was replaced between reboot
@@ -200,6 +193,10 @@ static inline void pm8921_bms_invalidate_shutdown_soc(void)
 {
 }
 static inline int pm8921_bms_cc_uah(int *cc_uah)
+{
+	return -ENXIO;
+}
+static inline int pm8921_bms_get_current_max(void)
 {
 	return -ENXIO;
 }
