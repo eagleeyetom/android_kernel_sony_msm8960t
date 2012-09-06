@@ -263,36 +263,6 @@ static void etm_clr_prog(struct etm_drvdata *drvdata)
 	     etm_readl(drvdata, ETMSR));
 }
 
-static void etm_enable_pcsave(void *info)
-{
-	struct etm_drvdata *drvdata = info;
-
-	ETM_UNLOCK(drvdata);
-
-	/*
-	 * ETMPDCR is only accessible via memory mapped interface and so use
-	 * it first to enable power/clock to allow subsequent cp14 accesses.
-	 */
-	etm_set_pwrup(drvdata);
-	etm_clr_pwrdwn(drvdata);
-
-	ETM_LOCK(drvdata);
-}
-
-static void etm_disable_pcsave(void *info)
-{
-	struct etm_drvdata *drvdata = info;
-
-	ETM_UNLOCK(drvdata);
-
-	if (!drvdata->enable) {
-		etm_set_pwrdwn(drvdata);
-		etm_clr_pwrup(drvdata);
-	}
-
-	ETM_LOCK(drvdata);
-}
-
 static void __etm_enable(void *info)
 {
 	int i;
@@ -366,20 +336,12 @@ static int etm_enable(struct coresight_device *csdev)
 	if (ret)
 		goto err_clk;
 
-	get_online_cpus();
-	spin_lock(&drvdata->spinlock);
-
-	/*
-	 * Executing __etm_enable on the cpu whose ETM is being enabled
+	mutex_lock(&drvdata->mutex);
+	/* executing __etm_enable on the cpu whose ETM is being enabled
 	 * ensures that register writes occur when cpu is powered.
 	 */
-	ret = smp_call_function_single(drvdata->cpu, __etm_enable, drvdata, 1);
-	if (ret)
-		goto err;
-	drvdata->enable = true;
-
-	spin_unlock(&drvdata->spinlock);
-	put_online_cpus();
+	smp_call_function_single(drvdata->cpu, __etm_enable, drvdata, 1);
+	mutex_unlock(&drvdata->mutex);
 
 	wake_unlock(&drvdata->wake_lock);
 
@@ -419,18 +381,12 @@ static void etm_disable(struct coresight_device *csdev)
 
 	wake_lock(&drvdata->wake_lock);
 
-	get_online_cpus();
-	spin_lock(&drvdata->spinlock);
-
-	/*
-	 * Executing __etm_disable on the cpu whose ETM is being disabled
+	mutex_lock(&drvdata->mutex);
+	/* executing __etm_disable on the cpu whose ETM is being disabled
 	 * ensures that register writes occur when cpu is powered.
 	 */
 	smp_call_function_single(drvdata->cpu, __etm_disable, drvdata, 1);
-	drvdata->enable = false;
-
-	spin_unlock(&drvdata->spinlock);
-	put_online_cpus();
+	mutex_unlock(&drvdata->mutex);
 
 	clk_disable_unprepare(drvdata->clk);
 
@@ -1816,8 +1772,6 @@ static int __devexit etm_remove(struct platform_device *pdev)
 	struct etm_drvdata *drvdata = platform_get_drvdata(pdev);
 
 	coresight_unregister(drvdata->csdev);
-	if (drvdata->cpu == 0)
-		unregister_hotcpu_notifier(&etm_cpu_notifier);
 	wake_lock_destroy(&drvdata->wake_lock);
 	return 0;
 }
