@@ -29,6 +29,9 @@
 #include <mach/msm_smd.h>
 #include <mach/msm_iomap.h>
 #include <linux/mfd/pm8xxx/misc.h>
+#ifdef CONFIG_WCNSS_MEM_PRE_ALLOC
+#include "wcnss_prealloc.h"
+#endif
 
 #define DEVICE "wcnss_wlan"
 #define VERSION "1.01"
