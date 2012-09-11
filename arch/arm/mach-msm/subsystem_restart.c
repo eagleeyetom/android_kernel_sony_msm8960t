@@ -804,21 +804,11 @@ static int __init ssr_init_soc_restart_orders(void)
 
 static int __init subsys_restart_init(void)
 {
-	int ret;
-
 	ssr_wq = alloc_workqueue("ssr_wq", WQ_CPU_INTENSIVE, 0);
-	BUG_ON(!ssr_wq);
-
-	ret = bus_register(&subsys_bus_type);
-	if (ret)
-		goto err_bus;
-	ret = subsys_debugfs_init();
-	if (ret)
-		goto err_debugfs;
-	ret = ssr_init_soc_restart_orders();
-	if (ret)
-		goto err_soc;
-	return 0;
+	if (!ssr_wq) {
+		pr_err("%s: out of memory\n", __func__);
+		return -ENOMEM;
+	}
 
 err_soc:
 	subsys_debugfs_exit();
