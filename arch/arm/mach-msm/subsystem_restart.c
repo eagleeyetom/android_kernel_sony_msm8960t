@@ -74,6 +74,7 @@ struct subsys_device {
 	struct work_struct work;
 	spinlock_t restart_lock;
 	bool restarting;
+	enum subsys_state state;
 
 	void *notify;
 	struct device dev;
@@ -246,6 +247,20 @@ static int restart_level_set(const char *val, struct kernel_param *kp)
 module_param_call(restart_level, restart_level_set, param_get_int,
 			&restart_level, 0644);
 
+static void subsys_set_state(struct subsys_device *subsys,
+			     enum subsys_state state)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&subsys->restart_lock, flags);
+	if (subsys->state != state) {
+		subsys->state = state;
+		spin_unlock_irqrestore(&subsys->restart_lock, flags);
+		return;
+	}
+	spin_unlock_irqrestore(&subsys->restart_lock, flags);
+}
+
 static struct subsys_soc_restart_order *
 update_restart_order(struct subsys_device *dev)
 {
@@ -367,6 +382,7 @@ static void subsystem_shutdown(struct subsys_device *dev, void *data)
 	if (dev->desc->shutdown(dev->desc) < 0) {
 		panic("subsys-restart: [%p]: Failed to shutdown %s!",
 			current, name);
+	}
 	subsys_set_state(dev, SUBSYS_OFFLINE);
 }
 
@@ -387,6 +403,7 @@ static void subsystem_powerup(struct subsys_device *dev, void *data)
 	if (dev->desc->powerup(dev->desc) < 0) {
 		panic("[%p]: Failed to powerup %s!", current, name);
 	}
+	subsys_set_state(dev, SUBSYS_ONLINE);
 }
 
 static void subsystem_restart_wq_func(struct work_struct *work)
@@ -666,27 +683,10 @@ struct subsys_device *subsys_register(struct subsys_desc *desc)
 	if (!subsys)
 		return ERR_PTR(-ENOMEM);
 
-	subsys->desc = desc;
-	subsys->owner = desc->owner;
-	subsys->dev.parent = desc->dev;
-	subsys->dev.bus = &subsys_bus_type;
-	subsys->dev.release = subsys_device_release;
-	subsys->state = SUBSYS_ONLINE; /* Until proper refcounting appears */
-
-	subsys->notify = subsys_notif_add_subsys(desc->name);
-	subsys->restart_order = update_restart_order(subsys);
-
-	snprintf(subsys->wlname, sizeof(subsys->wlname), "ssr(%s)", desc->name);
-	wake_lock_init(&subsys->wake_lock, WAKE_LOCK_SUSPEND, subsys->wlname);
-	INIT_WORK(&subsys->work, subsystem_restart_wq_func);
-	spin_lock_init(&subsys->restart_lock);
-
-	subsys->id = ida_simple_get(&subsys_ida, 0, 0, GFP_KERNEL);
-	if (subsys->id < 0) {
-		ret = subsys->id;
-		goto err_ida;
-	}
-	dev_set_name(&subsys->dev, "subsys%d", subsys->id);
+	dev->desc = desc;
+	dev->notify = subsys_notif_add_subsys(desc->name);
+	dev->restart_order = update_restart_order(dev);
+	dev->state = SUBSYS_ONLINE; /* Until proper refcounting appears */
 
 	mutex_init(&subsys->shutdown_lock);
 	mutex_init(&subsys->powerup_lock);
