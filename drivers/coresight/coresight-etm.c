@@ -178,6 +178,15 @@ module_param_named(
 	boot_enable, boot_enable, int, S_IRUGO
 );
 
+#ifdef CONFIG_CORESIGHT_ETM_PCSAVE_DEFAULT_ENABLE
+static int boot_pcsave_enable = 1;
+#else
+static int boot_pcsave_enable;
+#endif
+module_param_named(
+	boot_pcsave_enable, boot_pcsave_enable, int, S_IRUGO
+);
+
 struct etm_drvdata {
 	void __iomem			*base;
 	struct device			*dev;
@@ -197,6 +206,7 @@ struct etm_drvdata {
 	uint8_t				reset;
 	uint32_t			mode;
 	uint32_t			ctrl;
+	uint8_t				ctrl_pwrdwn;
 	uint32_t			trigger_event;
 	uint32_t			startstop_ctrl;
 	uint32_t			enable_event;
@@ -223,6 +233,7 @@ struct etm_drvdata {
 	uint32_t			ctxid_mask;
 	uint32_t			sync_freq;
 	uint32_t			timestamp_event;
+	uint8_t				pdcr_pwrup;
 	bool				pcsave_impl;
 	bool				pcsave_enable;
 };
@@ -331,6 +342,70 @@ static void etm_clr_prog(struct etm_drvdata *drvdata)
 	     etm_readl(drvdata, ETMSR));
 }
 
+static void etm_save_pwrdwn(struct etm_drvdata *drvdata)
+{
+	drvdata->ctrl_pwrdwn = BVAL(etm_readl(drvdata, ETMCR), 0);
+}
+
+static void etm_restore_pwrdwn(struct etm_drvdata *drvdata)
+{
+	uint32_t etmcr;
+
+	etmcr = etm_readl(drvdata, ETMCR);
+	etmcr = (etmcr & ~BIT(0)) | drvdata->ctrl_pwrdwn;
+	etm_writel(drvdata, etmcr, ETMCR);
+}
+
+static void etm_save_pwrup(struct etm_drvdata *drvdata)
+{
+	drvdata->pdcr_pwrup = BVAL(etm_readl_mm(drvdata, ETMPDCR), 3);
+}
+
+static void etm_restore_pwrup(struct etm_drvdata *drvdata)
+{
+	uint32_t etmpdcr;
+
+	etmpdcr = etm_readl_mm(drvdata, ETMPDCR);
+	etmpdcr = (etmpdcr & ~BIT(3)) | (drvdata->pdcr_pwrup << 3);
+	etm_writel_mm(drvdata, etmpdcr, ETMPDCR);
+}
+
+static void etm_enable_pcsave(void *info)
+{
+	struct etm_drvdata *drvdata = info;
+
+	ETM_UNLOCK(drvdata);
+
+	etm_save_pwrup(drvdata);
+	/*
+	 * ETMPDCR is only accessible via memory mapped interface and so use
+	 * it first to enable power/clock to allow subsequent cp14 accesses.
+	 */
+	etm_set_pwrup(drvdata);
+	etm_clr_pwrdwn(drvdata);
+	etm_restore_pwrup(drvdata);
+
+	ETM_LOCK(drvdata);
+}
+
+static void etm_disable_pcsave(void *info)
+{
+	struct etm_drvdata *drvdata = info;
+
+	ETM_UNLOCK(drvdata);
+
+	etm_save_pwrup(drvdata);
+	/*
+	 * ETMPDCR is only accessible via memory mapped interface and so use
+	 * it first to enable power/clock to allow subsequent cp14 accesses.
+	 */
+	etm_set_pwrup(drvdata);
+	etm_set_pwrdwn(drvdata);
+	etm_restore_pwrup(drvdata);
+
+	ETM_LOCK(drvdata);
+}
+
 static void __etm_enable(void *info)
 {
 	int i;
@@ -338,8 +413,13 @@ static void __etm_enable(void *info)
 	struct etm_drvdata *drvdata = info;
 
 	ETM_UNLOCK(drvdata);
-	/* Vote for ETM power/clock enable */
+	/*
+	 * Vote for ETM power/clock enable. ETMPDCR is only accessible via
+	 * memory mapped interface and so use it first to enable power/clock
+	 * to allow subsequent cp14 accesses.
+	 */
 	etm_set_pwrup(drvdata);
+	etm_save_pwrdwn(drvdata);
 	/*
 	 * Clear power down bit since when this bit is set writes to
 	 * certain registers might be ignored.
@@ -386,6 +466,7 @@ static void __etm_enable(void *info)
 	etm_writel(drvdata, 0x00000000, ETMVMIDCVR);
 
 	etm_clr_prog(drvdata);
+	etm_restore_pwrdwn(drvdata);
 	ETM_LOCK(drvdata);
 
 	dev_dbg(drvdata->dev, "cpu: %d enable smp call done\n", drvdata->cpu);
@@ -427,12 +508,18 @@ static void __etm_disable(void *info)
 	struct etm_drvdata *drvdata = info;
 
 	ETM_UNLOCK(drvdata);
+	etm_save_pwrdwn(drvdata);
+	/*
+	 * Clear power down bit since when this bit is set writes to
+	 * certain registers might be ignored.
+	 */
+	etm_clr_pwrdwn(drvdata);
 	etm_set_prog(drvdata);
 
 	/* program trace enable to low by using always false event */
 	etm_writel(drvdata, 0x6F | BIT(14), ETMTEEVR);
 
-	etm_set_pwrdwn(drvdata);
+	etm_restore_pwrdwn(drvdata);
 	/* Vote for ETM power/clock disable */
 	etm_clr_pwrup(drvdata);
 	ETM_LOCK(drvdata);
@@ -1392,6 +1479,7 @@ static ssize_t etm_show_sync_freq(struct device *dev,
 {
 	struct etm_drvdata *drvdata = dev_get_drvdata(dev->parent);
 	unsigned long val = drvdata->sync_freq;
+
 	return scnprintf(buf, PAGE_SIZE, "%#lx\n", val);
 }
 
@@ -1449,43 +1537,26 @@ static ssize_t etm_show_pcsave(struct device *dev,
 
 static int __etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
 {
-	int ret = 0;
+	int ret;
 
 	ret = clk_prepare_enable(drvdata->clk);
 	if (ret)
 		return ret;
 
-	get_online_cpus();
-	spin_lock(&drvdata->spinlock);
+	mutex_lock(&drvdata->mutex);
 	if (val) {
-		if (drvdata->pcsave_enable)
-			goto out;
-
-		ret = smp_call_function_single(drvdata->cpu, etm_enable_pcsave,
-					       drvdata, 1);
-		if (ret)
-			goto out;
+		smp_call_function_single(drvdata->cpu, etm_enable_pcsave,
+					 drvdata, 1);
 		drvdata->pcsave_enable = true;
-
-		dev_info(drvdata->dev, "PC save enabled\n");
 	} else {
-		if (!drvdata->pcsave_enable)
-			goto out;
-
-		ret = smp_call_function_single(drvdata->cpu, etm_disable_pcsave,
-					       drvdata, 1);
-		if (ret)
-			goto out;
+		smp_call_function_single(drvdata->cpu, etm_disable_pcsave,
+					 drvdata, 1);
 		drvdata->pcsave_enable = false;
-
-		dev_info(drvdata->dev, "PC save disabled\n");
 	}
-out:
-	spin_unlock(&drvdata->spinlock);
-	put_online_cpus();
+	mutex_unlock(&drvdata->mutex);
 
 	clk_disable_unprepare(drvdata->clk);
-	return ret;
+	return 0;
 }
 
 static ssize_t etm_store_pcsave(struct device *dev,
@@ -1615,7 +1686,11 @@ static void __devinit etm_init_arch_data(void *info)
 	struct etm_drvdata *drvdata = info;
 
 	ETM_UNLOCK(drvdata);
-	/* Vote for ETM power/clock enable */
+	/*
+	 * Vote for ETM power/clock enable. ETMPDCR is only accessible via
+	 * memory mapped interface and so use it first to enable power/clock
+	 * to allow subsequent cp14 accesses.
+	 */
 	etm_set_pwrup(drvdata);
 	/*
 	 * Clear power down bit since when this bit is set writes to
@@ -1817,10 +1892,23 @@ static int __devinit etm_probe(struct platform_device *pdev)
 			dev_err(dev, "ETM pcsave dev node creation failed\n");
 	}
 
+	if (pdev->dev.of_node)
+		drvdata->pcsave_impl = of_property_read_bool(pdev->dev.of_node,
+							     "qcom,pc-save");
+	if (drvdata->pcsave_impl) {
+		ret = device_create_file(&drvdata->csdev->dev,
+					 &dev_attr_pcsave);
+		if (ret)
+			dev_err(dev, "ETM pcsave dev node creation failed\n");
+	}
+
 	dev_info(dev, "ETM initialized\n");
 
 	if (boot_enable)
 		coresight_enable(drvdata->csdev);
+
+	if (drvdata->pcsave_impl && boot_pcsave_enable)
+		__etm_store_pcsave(drvdata, true);
 
 	return 0;
 err2:
@@ -1841,6 +1929,7 @@ static int __devexit etm_remove(struct platform_device *pdev)
 {
 	struct etm_drvdata *drvdata = platform_get_drvdata(pdev);
 
+	device_remove_file(&drvdata->csdev->dev, &dev_attr_pcsave);
 	coresight_unregister(drvdata->csdev);
 	wake_lock_destroy(&drvdata->wake_lock);
 	return 0;
