@@ -1,5 +1,5 @@
-#ifndef _LINUX_CORESIGHT_STM_H
-#define _LINUX_CORESIGHT_STM_H
+#ifndef __MACH_STM_H
+#define __MACH_STM_H
 
 enum {
 	OST_ENTITY_NONE			= 0x00,
