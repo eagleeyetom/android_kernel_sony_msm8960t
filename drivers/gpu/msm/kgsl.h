@@ -124,7 +124,10 @@ struct kgsl_memdesc_ops {
 	int (*map_kernel_mem)(struct kgsl_memdesc *);
 };
 
+/* Internal definitions for memdesc->priv */
 #define KGSL_MEMDESC_GUARD_PAGE BIT(0)
+/* Set if the memdesc is mapped into all pagetables */
+#define KGSL_MEMDESC_GLOBAL BIT(1)
 
 /* shared memory allocation */
 struct kgsl_memdesc {
@@ -133,12 +136,11 @@ struct kgsl_memdesc {
 	unsigned int gpuaddr;
 	unsigned int physaddr;
 	unsigned int size;
-	unsigned int priv;
+	unsigned int priv; /* Internal flags and settings */
 	struct scatterlist *sg;
 	unsigned int sglen;
 	struct kgsl_memdesc_ops *ops;
-	int flags;
-	int *faulted;
+	unsigned int flags; /* Flags set from userspace */
 };
 
 /* List of different memory entry types */
