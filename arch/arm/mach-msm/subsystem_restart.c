@@ -503,17 +503,7 @@ static void __subsystem_restart_dev(struct subsys_device *dev)
 
 int subsystem_restart_dev(struct subsys_device *dev)
 {
-	const char *name;
-
-	if (!get_device(&dev->dev))
-		return -ENODEV;
-
-	if (!try_module_get(dev->owner)) {
-		put_device(&dev->dev);
-		return -ENODEV;
-	}
-
-	name = dev->desc->name;
+	const char *name = dev->desc->name;
 
 	/*
 	 * If a system reboot/shutdown is underway, ignore subsystem errors.
