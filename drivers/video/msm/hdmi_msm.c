@@ -1,5 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
- * Copyright (C) 2012-2013 Sony Mobile Communications AB.
+/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -4471,11 +4470,9 @@ EXPORT_SYMBOL(mhl_connect_api);
 static int hdmi_msm_power_off(struct platform_device *pdev)
 {
 	int ret = 0;
-	char *envp[2];
 
-	if (!(MSM_HDMI_BASE && hdmi_msm_state &&
-		hdmi_msm_state->hdmi_app_clk)) {
-		DEV_ERR("%s: HDMI not initialized\n", __func__);
+	if (!hdmi_ready()) {
+		DEV_ERR("%s: HDMI/HPD not initialized\n", __func__);
 		return ret;
 	}
 
@@ -4533,11 +4530,6 @@ error:
 	hdmi_msm_hpd_polarity_setup();
 
 	return ret;
-}
-
-bool mhl_is_enabled(void)
-{
-	return hdmi_msm_state->is_mhl_enabled;
 }
 
 void hdmi_msm_config_hdcp_feature(void)
@@ -4802,7 +4794,6 @@ static int hdmi_msm_hpd_feature(int on)
 				TRUE);
 #endif
 	} else {
-		hdmi_msm_hpd_off();
 		if (external_common_state->hpd_state) {
 			external_common_state->hpd_state = 0;
 
@@ -4815,6 +4806,7 @@ static int hdmi_msm_hpd_feature(int on)
 				&hdmi_msm_state->hpd_event_processed, HZ);
 		}
 
+		hdmi_msm_hpd_off();
 
 		/* Set HDMI switch node to 0 on HPD feature disable */
 		switch_set_state(&external_common_state->sdev, 0);
