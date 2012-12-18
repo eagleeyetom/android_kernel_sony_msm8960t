@@ -3,8 +3,7 @@
  * Core MSM framebuffer driver.
  *
  * Copyright (C) 2007 Google Incorporated
- * Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
- * Copyright (C) 2012-2013 Sony Mobile Communications AB.
+ * Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -1850,14 +1849,10 @@ static int msm_fb_pan_display(struct fb_var_screeninfo *var,
 		}
 	}
 
-	if (pdata->power_on_panel_at_pan) {
-		/* No vsync allowed at first pan since it will hang
-		   during dma transfer */
-		mdp_set_dma_pan_info(info, dirtyPtr, FALSE);
-	} else {
-		mdp_set_dma_pan_info(info, dirtyPtr,
-					(var->activate == FB_ACTIVATE_VBL));
-	}
+	mdp_set_dma_pan_info(info, dirtyPtr,
+			     (var->activate & FB_ACTIVATE_VBL));
+	/* async call */
+
 	mdp_dma_pan_update(info);
 	up(&msm_fb_pan_sem);
 
