@@ -1,5 +1,4 @@
-/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
- * Copyright (c) 2012 Sony Mobile Communications AB.
+/* Copyright (c) 2009-2013, Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -2132,26 +2131,8 @@ static void msm_chg_recheck_stop_work(struct work_struct *w)
 		cancel_delayed_work_sync(&motg->chg_work);
 }
 
-static void msm_otg_stop_recheck_chgtype(struct usb_phy *phy)
-{
-	struct msm_otg *motg = container_of(phy, struct msm_otg, phy);
-
-	/*
-	 * This function can be called from interrupt context.
-	 * Calling cancel_delayed_work from interrupt context is dangerous
-	 * and it will cause runtime warning.
-	 * So use schedule_work to stop recheck work.
-	 */
-	schedule_work(&motg->chg_recheck_stop_work);
-}
-
-#ifndef PORTSC_LS
-#define PORTSC_LS (3 << 10) /* Port's Line status */
-#endif
-#define MSM_CHG_RECHECK_POLL_TIME	(1000 * HZ/1000) /* 1 sec */
-#define MSM_CHG_RECHECK_MAX_RETRIES	5
-#define MSM_CHG_DCD_POLL_TIME		(100 * HZ/1000) /* 100 msec */
-#define MSM_CHG_DCD_MAX_RETRIES		6 /* Tdcd_tmout = 6 * 100 msec */
+#define MSM_CHG_DCD_TIMEOUT		(750 * HZ/1000) /* 750 msec */
+#define MSM_CHG_DCD_POLL_TIME		(50 * HZ/1000) /* 50 msec */
 #define MSM_CHG_PRIMARY_DET_TIME	(50 * HZ/1000) /* TVDPSRC_ON */
 #define MSM_CHG_SECONDARY_DET_TIME	(50 * HZ/1000) /* TVDMSRC_ON */
 static void msm_chg_detect_work(struct work_struct *w)
@@ -2176,7 +2157,7 @@ static void msm_chg_detect_work(struct work_struct *w)
 			msm_chg_enable_dcd(motg);
 		msm_chg_enable_aca_det(motg);
 		motg->chg_state = USB_CHG_STATE_WAIT_FOR_DCD;
-		motg->dcd_retries = 0;
+		motg->dcd_time = 0;
 		delay = MSM_CHG_DCD_POLL_TIME;
 		break;
 	case USB_CHG_STATE_WAIT_FOR_DCD:
@@ -2200,9 +2181,9 @@ static void msm_chg_detect_work(struct work_struct *w)
 				break;
 			}
 		}
-		if (motg->pdata->enable_dcd)
-			is_dcd = msm_chg_check_dcd(motg);
-		tmout = ++motg->dcd_retries == MSM_CHG_DCD_MAX_RETRIES;
+		is_dcd = msm_chg_check_dcd(motg);
+		motg->dcd_time += MSM_CHG_DCD_POLL_TIME;
+		tmout = motg->dcd_time >= MSM_CHG_DCD_TIMEOUT;
 		if (is_dcd || tmout) {
 			if (motg->pdata->enable_dcd)
 				msm_chg_disable_dcd(motg);
