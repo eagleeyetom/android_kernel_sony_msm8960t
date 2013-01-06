@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,6 +25,7 @@
 #include <linux/slab.h>          /* kfree, kzalloc */
 #include <linux/ioport.h>        /* XXX_ mem_region */
 #include <linux/dma-mapping.h>   /* dma_XXX */
+#include <linux/dmapool.h>       /* DMA pools */
 #include <linux/delay.h>         /* msleep */
 #include <linux/platform_device.h>
 #include <linux/clk.h>
@@ -52,8 +53,23 @@
 #define TSPP_SPS_DESCRIPTOR_COUNT      128
 #define TSPP_PACKET_LENGTH             188
 #define TSPP_MIN_BUFFER_SIZE           (TSPP_PACKET_LENGTH)
-#define TSPP_MAX_BUFFER_SIZE           (32 * 1024)
-#define TSPP_NUM_BUFFERS               64
+
+/* Max descriptor buffer size allowed by SPS */
+#define TSPP_MAX_BUFFER_SIZE           (32 * 1024 - 1)
+
+/*
+ * Returns whether to use DMA pool for TSPP output buffers.
+ * For buffers smaller than page size, using DMA pool
+ * provides better memory utilization as dma_alloc_coherent
+ * allocates minimum of page size.
+ */
+#define TSPP_USE_DMA_POOL(buff_size)   ((buff_size) < PAGE_SIZE)
+
+/*
+ * Max allowed TSPP buffers/descriptors.
+ * If SPS desc FIFO holds X descriptors, we can queue up to X-1 descriptors.
+ */
+#define TSPP_NUM_BUFFERS               (TSPP_SPS_DESCRIPTOR_COUNT - 1)
 #define TSPP_TSIF_DEFAULT_TIME_LIMIT   60
 #define SPS_DESCRIPTOR_SIZE            8
 #define MIN_ACCEPTABLE_BUFFER_COUNT    2
@@ -370,7 +386,11 @@ struct tspp_channel {
 	enum tspp_mode mode;
 	tspp_notifier *notifier; /* used only with kernel api */
 	void *notify_data;       /* data to be passed with the notifier */
-	u32 notify_timer;        /* notification for partially filled buffers */
+	u32 expiration_period_ms; /* notification on partially filled buffers */
+	struct timer_list expiration_timer;
+	struct dma_pool *dma_pool;
+	tspp_memfree *memfree;   /* user defined memory free function */
+	void *user_info; /* user cookie passed to memory alloc/free function */
 };
 
 struct tspp_pid_filter_table {
@@ -790,7 +810,7 @@ static void tspp_free_key_entry(int entry)
 }
 
 static int tspp_alloc_buffer(u32 channel_id, struct tspp_data_descriptor *desc,
-	u32 size, tspp_allocator *alloc, void *user)
+	u32 size, struct dma_pool *dma_pool, tspp_allocator *alloc, void *user)
 {
 	if (size < TSPP_MIN_BUFFER_SIZE ||
 		size > TSPP_MAX_BUFFER_SIZE) {
@@ -803,12 +823,17 @@ static int tspp_alloc_buffer(u32 channel_id, struct tspp_data_descriptor *desc,
 		desc->virt_base = alloc(channel_id, size,
 			&desc->phys_base, user);
 	} else {
-	desc->virt_base = dma_alloc_coherent(NULL, size,
-		&desc->phys_base, GFP_KERNEL);
-	if (desc->virt_base == 0) {
-		pr_err("tspp dma alloc coherent failed %i", size);
-		return -ENOMEM;
-	}
+		if (!dma_pool)
+			desc->virt_base = dma_alloc_coherent(NULL, size,
+				&desc->phys_base, GFP_KERNEL);
+		else
+			desc->virt_base = dma_pool_alloc(dma_pool, GFP_KERNEL,
+				&desc->phys_base);
+
+		if (desc->virt_base == 0) {
+			pr_err("tspp: dma buffer allocation failed %i\n", size);
+			return -ENOMEM;
+		}
 	}
 
 	desc->size = size;
@@ -1009,6 +1034,119 @@ static void tspp_set_tsif_mode(struct tspp_channel *channel,
 		return;
 	}
 	channel->pdev->tsif[index].mode = mode;
+}
+
+static void tspp_set_signal_inversion(struct tspp_channel *channel,
+					int clock_inverse, int data_inverse,
+					int sync_inverse, int enable_inverse)
+{
+	int index;
+
+	switch (channel->src) {
+	case TSPP_SOURCE_TSIF0:
+		index = 0;
+		break;
+	case TSPP_SOURCE_TSIF1:
+		index = 1;
+		break;
+	default:
+		return;
+	}
+	channel->pdev->tsif[index].clock_inverse = clock_inverse;
+	channel->pdev->tsif[index].data_inverse = data_inverse;
+	channel->pdev->tsif[index].sync_inverse = sync_inverse;
+	channel->pdev->tsif[index].enable_inverse = enable_inverse;
+}
+
+static int tspp_is_buffer_size_aligned(u32 size, enum tspp_mode mode)
+{
+	u32 alignment;
+
+	switch (mode) {
+	case TSPP_MODE_RAW:
+		/* must be a multiple of 192 */
+		alignment = (TSPP_PACKET_LENGTH + 4);
+		if (size % alignment)
+			return 0;
+		return 1;
+
+	case TSPP_MODE_RAW_NO_SUFFIX:
+		/* must be a multiple of 188 */
+		alignment = TSPP_PACKET_LENGTH;
+		if (size % alignment)
+			return 0;
+		return 1;
+
+	case TSPP_MODE_DISABLED:
+	case TSPP_MODE_PES:
+	default:
+		/* no alignment requirement */
+		return 1;
+	}
+
+}
+
+static u32 tspp_align_buffer_size_by_mode(u32 size, enum tspp_mode mode)
+{
+	u32 new_size;
+	u32 alignment;
+
+	switch (mode) {
+	case TSPP_MODE_RAW:
+		/* must be a multiple of 192 */
+		alignment = (TSPP_PACKET_LENGTH + 4);
+		break;
+
+	case TSPP_MODE_RAW_NO_SUFFIX:
+		/* must be a multiple of 188 */
+		alignment = TSPP_PACKET_LENGTH;
+		break;
+
+	case TSPP_MODE_DISABLED:
+	case TSPP_MODE_PES:
+	default:
+		/* no alignment requirement - give the user what he asks for */
+		alignment = 1;
+		break;
+	}
+	/* align up */
+	new_size = (((size + alignment - 1) / alignment) * alignment);
+	return new_size;
+}
+
+static void tspp_destroy_buffers(u32 channel_id, struct tspp_channel *channel)
+{
+	int i;
+	struct tspp_mem_buffer *pbuf, *temp;
+
+	pbuf = channel->data;
+	for (i = 0; i < channel->buffer_count; i++) {
+		if (pbuf->desc.phys_base) {
+			if (channel->memfree) {
+				channel->memfree(channel_id,
+					pbuf->desc.size,
+					pbuf->desc.virt_base,
+					pbuf->desc.phys_base,
+					channel->user_info);
+			} else {
+				if (!channel->dma_pool)
+					dma_free_coherent(NULL,
+						pbuf->desc.size,
+						pbuf->desc.virt_base,
+						pbuf->desc.phys_base);
+				else
+					dma_pool_free(channel->dma_pool,
+						pbuf->desc.virt_base,
+						pbuf->desc.phys_base);
+			}
+			pbuf->desc.phys_base = 0;
+		}
+		pbuf->desc.virt_base = 0;
+		pbuf->state = TSPP_BUF_STATE_EMPTY;
+		temp = pbuf;
+		pbuf = pbuf->next;
+		kfree(temp);
+	}
 }
 
 /*** TSPP API functions ***/
@@ -1285,21 +1423,16 @@ int tspp_close_channel(u32 dev, u32 channel_id)
 	dma_free_coherent(NULL, config->desc.size, config->desc.base,
 		config->desc.phys_base);
 
-	pbuf = channel->data;
-	for (i = 0; i < channel->buffer_count; i++) {
-		if (pbuf->desc.phys_base) {
-			dma_free_coherent(NULL,
-				pbuf->desc.size,
-				pbuf->desc.virt_base,
-				pbuf->desc.phys_base);
-			pbuf->desc.phys_base = 0;
-		}
-		pbuf->desc.virt_base = 0;
-		pbuf->state = TSPP_BUF_STATE_EMPTY;
-		temp = pbuf;
-		pbuf = pbuf->next;
-		kfree(temp);
+	tspp_destroy_buffers(channel_id, channel);
+	if (channel->dma_pool) {
+		dma_pool_destroy(channel->dma_pool);
+		channel->dma_pool = NULL;
 	}
+
+	channel->src = TSPP_SOURCE_NONE;
+	channel->mode = TSPP_MODE_DISABLED;
+	channel->memfree = NULL;
+	channel->user_info = NULL;
 	channel->buffer_count = 0;
 	channel->data = NULL;
 	channel->read = NULL;
@@ -1420,13 +1553,22 @@ int tspp_add_filter(u32 dev, u32 channel_id,
 	pdev->filters[channel->src]->
 		filter[filter->priority].filter = p.filter;
 
-	/* allocate buffers if needed */
-	tspp_allocate_buffers(dev, channel->id, channel->max_buffers,
-		channel->buffer_size, channel->int_freq, 0, 0);
-	if (channel->buffer_count < MIN_ACCEPTABLE_BUFFER_COUNT) {
-		pr_err("tspp: failed to allocate at least %i buffers",
-			MIN_ACCEPTABLE_BUFFER_COUNT);
-		return -ENOMEM;
+	/*
+	 * allocate buffers if needed (i.e. if user did has not already called
+	 * tspp_allocate_buffers() explicitly).
+	 */
+	if (channel->buffer_count == 0) {
+		channel->buffer_size =
+		tspp_align_buffer_size_by_mode(channel->buffer_size,
+							channel->mode);
+		rc = tspp_allocate_buffers(dev, channel->id,
+					channel->max_buffers,
+					channel->buffer_size,
+					channel->int_freq, NULL, NULL, NULL);
+		if (rc != 0) {
+			pr_err("tspp: tspp_allocate_buffers failed\n");
+			return rc;
+		}
 	}
 
 	/* reenable pipe */
@@ -1698,38 +1840,50 @@ int tspp_allocate_buffers(u32 dev, u32 channel_id,	u32 count,
 	}
 	channel = &pdev->channels[channel_id];
 
+	/* allow buffer allocation only if there was no previous buffer
+	 * allocation for this channel.
+	 */
+	if (channel->buffer_count > 0) {
+		pr_err("%s: buffers already allocated for channel %u",
+			__func__, channel_id);
+		return -EINVAL;
+	}
+
 	channel->max_buffers = count;
 
 	/* set up interrupt frequency */
 	if (int_freq > channel->max_buffers)
 		int_freq = channel->max_buffers;
 	channel->int_freq = int_freq;
+	/*
+	 * it is the responsibility of the caller to tspp_allocate_buffers(),
+	 * whether it's the user or the driver, to make sure the size parameter
+	 * is compatible to the channel mode.
+	 */
+	channel->buffer_size = size;
 
-	switch (channel->mode) {
-	case TSPP_MODE_DISABLED:
-	case TSPP_MODE_PES:
-		/* give the user what he asks for */
-		channel->buffer_size = size;
-		break;
+	/* save user defined memory free function for later use */
+	channel->memfree = memfree;
+	channel->user_info = user;
 
-	case TSPP_MODE_RAW:
-		/* must be a multiple of 192 */
-		if (size < (TSPP_PACKET_LENGTH+4))
-			channel->buffer_size = (TSPP_PACKET_LENGTH+4);
-		else
-			channel->buffer_size = (size /
-				(TSPP_PACKET_LENGTH+4)) *
-				(TSPP_PACKET_LENGTH+4);
-		break;
-
-	case TSPP_MODE_RAW_NO_SUFFIX:
-		/* must be a multiple of 188 */
-		channel->buffer_size = (size / TSPP_PACKET_LENGTH) *
-			TSPP_PACKET_LENGTH;
-		break;
+	/*
+	 * For small buffers, create a DMA pool so that memory
+	 * is not wasted through dma_alloc_coherent.
+	 */
+	if (TSPP_USE_DMA_POOL(channel->buffer_size)) {
+		channel->dma_pool = dma_pool_create("tspp",
+			NULL, channel->buffer_size, 0, 0);
+		if (!channel->dma_pool) {
+			pr_err("%s: Can't allocate memory pool\n", __func__);
+			return -ENOMEM;
+		}
+	} else {
+		channel->dma_pool = NULL;
 	}
 
-	for (; channel->buffer_count < channel->max_buffers;
+
+	for (channel->buffer_count = 0;
+		channel->buffer_count < channel->max_buffers;
 		channel->buffer_count++) {
 
 		/* allocate the descriptor */
@@ -1744,7 +1898,8 @@ int tspp_allocate_buffers(u32 dev, u32 channel_id,	u32 count,
 		desc->desc.id = channel->buffer_count;
 		/* allocate the buffer */
 		if (tspp_alloc_buffer(channel_id, &desc->desc,
-			channel->buffer_size, alloc, user) != 0) {
+			channel->buffer_size, channel->dma_pool,
+			alloc, user) != 0) {
 			kfree(desc);
 			pr_warn("tspp: Can't allocate buffer %i",
 				channel->buffer_count);
@@ -1770,7 +1925,23 @@ int tspp_allocate_buffers(u32 dev, u32 channel_id,	u32 count,
 
 		/* start the transfer */
 		if (tspp_queue_buffer(channel, desc))
-			pr_err("tspp: can't queue buffer %i", desc->desc.id);
+			pr_err("%s: can't queue buffer %i",
+				__func__, desc->desc.id);
+	}
+
+	if (channel->buffer_count < channel->max_buffers) {
+		/*
+		 * we failed to allocate the requested number of buffers.
+		 * we don't allow a partial success, so need to clean up here.
+		 */
+		tspp_destroy_buffers(channel_id, channel);
+		channel->buffer_count = 0;
+
+		if (channel->dma_pool) {
+			dma_pool_destroy(channel->dma_pool);
+			channel->dma_pool = NULL;
+		}
+		return -ENOMEM;
 	}
 
 	channel->waiting = channel->data;
@@ -1898,8 +2069,10 @@ static ssize_t tspp_read(struct file *filp, char __user *buf, size_t count,
 			and set up for reading the next one */
 		if (buffer->read_index == buffer->filled) {
 			buffer->state = TSPP_BUF_STATE_WAITING;
+
 			if (tspp_queue_buffer(channel, buffer))
 				pr_err("tspp: can't submit transfer");
+
 			channel->locked = channel->read;
 			channel->read = channel->read->next;
 		}
