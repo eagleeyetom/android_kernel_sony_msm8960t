@@ -29,6 +29,11 @@ extern char *mmss_cc_base;	/* mutimedia sub system clock control */
 extern spinlock_t dsi_clk_lock;
 extern u32 mdp_max_clk;
 
+extern u64 mdp_max_bw;
+#define MDP4_BW_AB_FACTOR (115)	/* 1.15 */
+#define MDP4_BW_IB_FACTOR (125)	/* 1.25 */
+#define MDP_BUS_SCALE_AB_STEP (0x4000000)
+
 #define MDP4_OVERLAYPROC0_BASE	0x10000
 #define MDP4_OVERLAYPROC1_BASE	0x18000
 #define MDP4_OVERLAYPROC2_BASE	0x88000
