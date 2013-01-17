@@ -1799,6 +1799,19 @@ void msm_fb_release_timeline(struct msm_fb_data_type *mfd)
 }
 
 DEFINE_SEMAPHORE(msm_fb_pan_sem);
+static int msm_fb_pan_idle(struct msm_fb_data_type *mfd)
+{
+	mutex_lock(&mfd->sync_mutex);
+	if (mfd->timeline) {
+		sw_sync_timeline_inc(mfd->timeline, 2);
+		mfd->timeline_value += 2;
+	}
+	mfd->last_rel_fence = 0;
+	mfd->cur_rel_fence = 0;
+	mutex_unlock(&mfd->sync_mutex);
+}
+
+DEFINE_SEMAPHORE(msm_fb_pan_sem);
 
 static void bl_workqueue_handler(struct work_struct *work)
 {
