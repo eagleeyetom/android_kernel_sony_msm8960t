@@ -1656,6 +1656,11 @@ static uint8_t spm_retention_cmd_sequence[] __initdata = {
 	0x0B, 0x00, 0x0f,
 };
 
+static uint8_t spm_retention_cmd_sequence[] __initdata = {
+			0x00, 0x05, 0x03, 0x0D,
+			0x0B, 0x00, 0x0f,
+};
+
 static uint8_t spm_power_collapse_without_rpm[] __initdata = {
 	0x00, 0x24, 0x54, 0x10,
 	0x09, 0x03, 0x01,
@@ -1678,24 +1683,19 @@ static uint8_t spm_power_collapse_without_rpm_krait_v3[] __initdata = {
 	0x24, 0x30, 0x0f,
 };
 
-static uint8_t spm_power_collapse_with_rpm_krait_v3[] __initdata = {
-	0x00, 0x24, 0x84, 0x10,
-	0x09, 0x07, 0x01, 0x0B,
-	0x10, 0x84, 0x30, 0x0C,
-	0x24, 0x30, 0x0f,
-};
-
 static struct msm_spm_seq_entry msm_spm_boot_cpu_seq_list[] __initdata = {
 	[0] = {
 		.mode = MSM_SPM_MODE_CLOCK_GATING,
 		.notify_rpm = false,
 		.cmd = spm_wfi_cmd_sequence,
 	},
+
 	[1] = {
 		.mode = MSM_SPM_MODE_POWER_RETENTION,
 		.notify_rpm = false,
 		.cmd = spm_retention_cmd_sequence,
 	},
+
 	[2] = {
 		.mode = MSM_SPM_MODE_POWER_COLLAPSE,
 		.notify_rpm = false,
@@ -2862,6 +2862,7 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm8960_cache_dump_device,
 	&msm8960_iommu_domain_device,
 	&msm_tsens_device,
+	&msm8960_pc_cntr,
 };
 
 static struct platform_device *cdp_devices[] __initdata = {
@@ -3182,12 +3183,14 @@ static struct i2c_board_info isl_charger_i2c_info[] __initdata = {
 };
 #endif /* CONFIG_ISL9519_CHARGER */
 
+#if defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)
 static struct i2c_board_info liquid_io_expander_i2c_info[] __initdata = {
 	{
 		I2C_BOARD_INFO("sx1508q", 0x20),
 		.platform_data = &msm8960_sx150x_data[SX150X_LIQUID]
 	},
 };
+#endif
 
 static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 #ifdef CONFIG_ISL9519_CHARGER
@@ -3222,12 +3225,14 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		msm_isa1200_board_info,
 		ARRAY_SIZE(msm_isa1200_board_info),
 	},
+#if defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)
 	{
 		I2C_LIQUID,
 		MSM_8960_GSBI10_QUP_I2C_BUS_ID,
 		liquid_io_expander_i2c_info,
 		ARRAY_SIZE(liquid_io_expander_i2c_info),
 	},
+#endif
 };
 #endif /* CONFIG_I2C */
 
@@ -3438,6 +3443,7 @@ static void __init msm8960_cdp_init(void)
 		platform_device_register(&mdm_sglte_device);
 	}
 	msm_pm_set_tz_retention_flag(1);
+	ion_adjust_secure_allocation();
 }
 
 MACHINE_START(MSM8960_CDP, "QCT MSM8960 CDP")

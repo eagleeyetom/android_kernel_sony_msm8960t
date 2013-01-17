@@ -1,7 +1,7 @@
 /* include/linux/msm_mdp.h
  *
  * Copyright (C) 2007 Google Incorporated
- * Copyright (c) 2012 Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -514,9 +514,8 @@ struct mdp_blend_cfg {
 struct msmfb_metadata {
 	uint32_t op;
 	uint32_t flags;
-	union {
-		struct mdp_blend_cfg blend_cfg;
-	} data;
+	uint32_t wait_for_finish;
+	struct fb_var_screeninfo var;
 };
 struct mdp_page_protection {
 	uint32_t page_protection;

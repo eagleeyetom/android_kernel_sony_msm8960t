@@ -1,5 +1,4 @@
-/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
- * Copyright (C) 2012-2013 Sony Mobile Communications AB.
+/* Copyright (c) 2008-2013, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -192,12 +191,23 @@ struct msm_fb_data_type {
 	u32 writeback_state;
 	bool writeback_active_cnt;
 	int cont_splash_done;
-
-	struct mutex power_lock;
-
-	void *copy_splash_buf;
-	unsigned char *copy_splash_phys;
 	void *cpu_pm_hdl;
+	u32 acq_fen_cnt;
+	struct sync_fence *acq_fen[MDP_MAX_FENCE_FD];
+	int cur_rel_fen_fd;
+	struct sync_pt *cur_rel_sync_pt;
+	struct sync_fence *cur_rel_fence;
+	struct sync_fence *last_rel_fence;
+	struct sw_sync_timeline *timeline;
+	int timeline_value;
+	u32 last_acq_fen_cnt;
+	struct sync_fence *last_acq_fen[MDP_MAX_FENCE_FD];
+	struct mutex sync_mutex;
+	struct completion commit_comp;
+	u32 is_committing;
+	struct work_struct commit_work;
+	void *msm_fb_backup;
+	boolean panel_driver_on;
 	int vsync_sysfs_created;
 #ifdef CONFIG_FB_MSM_RECOVER_PANEL
 	bool nvrw_prohibit_draw;
@@ -221,7 +231,9 @@ int msm_fb_writeback_stop(struct fb_info *info);
 int msm_fb_writeback_terminate(struct fb_info *info);
 int msm_fb_detect_client(const char *name);
 int calc_fb_offset(struct msm_fb_data_type *mfd, struct fb_info *fbi, int bpp);
-
+void msm_fb_wait_for_fence(struct msm_fb_data_type *mfd);
+int msm_fb_signal_timeline(struct msm_fb_data_type *mfd);
+void msm_fb_release_timeline(struct msm_fb_data_type *mfd);
 #ifdef CONFIG_FB_BACKLIGHT
 void msm_fb_config_backlight(struct msm_fb_data_type *mfd);
 #endif

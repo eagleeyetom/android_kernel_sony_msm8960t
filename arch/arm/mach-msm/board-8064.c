@@ -1601,10 +1601,10 @@ static struct cyttsp_regulator cyttsp_regulator_data[] = {
 static struct cyttsp_platform_data cyttsp_pdata = {
 	.panel_maxx = 634,
 	.panel_maxy = 1166,
-	.disp_maxx = 599,
-	.disp_maxy = 1023,
-	.disp_minx = 0,
-	.disp_miny = 0,
+	.disp_minx = 18,
+	.disp_maxx = 617,
+	.disp_miny = 18,
+	.disp_maxy = 1041,
 	.flags = 0x01,
 	.gen = CY_GEN3,
 	.use_st = CY_USE_ST,
@@ -2164,21 +2164,6 @@ static uint8_t spm_power_collapse_with_rpm[] __initdata = {
 	0x24, 0x30, 0x0f,
 };
 
-/* 8064AB has a different command to assert apc_pdn */
-static uint8_t spm_power_collapse_without_rpm_krait_v3[] __initdata = {
-	0x00, 0x24, 0x84, 0x10,
-	0x09, 0x03, 0x01,
-	0x10, 0x84, 0x30, 0x0C,
-	0x24, 0x30, 0x0f,
-};
-
-static uint8_t spm_power_collapse_with_rpm_krait_v3[] __initdata = {
-	0x00, 0x24, 0x84, 0x10,
-	0x09, 0x07, 0x01, 0x0B,
-	0x10, 0x84, 0x30, 0x0C,
-	0x24, 0x30, 0x0f,
-};
-
 static struct msm_spm_seq_entry msm_spm_boot_cpu_seq_list[] __initdata = {
 	[0] = {
 		.mode = MSM_SPM_MODE_CLOCK_GATING,
@@ -2625,6 +2610,7 @@ static struct platform_device *cdp_devices[] __initdata = {
 #ifdef CONFIG_MSM_ROTATOR
 	&msm_rotator_device,
 #endif
+	&msm8064_pc_cntr,
 };
 
 static struct platform_device
