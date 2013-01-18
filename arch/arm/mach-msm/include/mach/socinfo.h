@@ -90,6 +90,7 @@ enum msm_cpu {
 	MSM_CPU_7X25AB,
 	MSM_CPU_8064,
 	MSM_CPU_8064AB,
+	MSM_CPU_8064AA,
 	MSM_CPU_8930,
 	MSM_CPU_8930AA,
 	MSM_CPU_7X27AA,
@@ -314,6 +315,15 @@ static inline int cpu_is_apq8064ab(void)
 #endif
 }
 
+static inline int cpu_is_apq8064aa(void)
+{
+#ifdef CONFIG_ARCH_APQ8064
+	return read_msm_cpu_type() == MSM_CPU_8064AA;
+#else
+	return 0;
+#endif
+}
+
 static inline int cpu_is_msm8930(void)
 {
 #ifdef CONFIG_ARCH_MSM8930
@@ -413,6 +423,22 @@ static inline int cpu_is_msm8226(void)
 #else
 	return 0;
 #endif
+}
+
+static inline int soc_class_is_msm8960(void)
+{
+	return cpu_is_msm8960() || cpu_is_msm8960ab();
+}
+
+static inline int soc_class_is_apq8064(void)
+{
+	return cpu_is_apq8064() || cpu_is_apq8064ab() || cpu_is_apq8064aa();
+}
+
+static inline int soc_class_is_msm8930(void)
+{
+	return cpu_is_msm8930() || cpu_is_msm8930aa() || cpu_is_msm8930ab() ||
+	       cpu_is_msm8627();
 }
 
 #endif
