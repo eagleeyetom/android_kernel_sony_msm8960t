@@ -1758,6 +1758,16 @@ static void bl_workqueue_handler(struct work_struct *work)
 static int msm_fb_pan_display(struct fb_var_screeninfo *var,
 			      struct fb_info *info)
 {
+	struct mdp_display_commit disp_commit;
+	memset(&disp_commit, 0, sizeof(disp_commit));
+	disp_commit.var = *var;
+	disp_commit.wait_for_finish = TRUE;
+	return msm_fb_pan_display_ex(info, &disp_commit);
+}
+
+static int msm_fb_pan_display_sub(struct fb_var_screeninfo *var,
+			      struct fb_info *info)
+{
 	struct mdp_dirty_region dirty;
 	struct mdp_dirty_region *dirtyPtr = NULL;
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
