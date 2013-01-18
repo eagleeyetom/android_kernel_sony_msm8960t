@@ -6346,7 +6346,7 @@ static void __init reg_init(void)
 		writel_relaxed(0x3C7097F9, AHB_EN2_REG);
 	}
 
-	if (cpu_is_apq8064() || cpu_is_apq8064ab())
+	if (soc_class_is_apq8064())
 		rmwreg(0x00000000, AHB_EN3_REG, 0x00000001);
 
 	/* Deassert all locally-owned MM AHB resets. */
@@ -6589,12 +6589,9 @@ static void __init msm8960_clock_pre_init(void)
 		SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 2) ||
 		cpu_is_apq8064ab() || cpu_is_apq8064aa()) {
 
-		memcpy(vcodec_clk.c.fmax, fmax_vcodec_8064v2,
-			sizeof(vcodec_clk.c.fmax));
-		memcpy(ce3_src_clk.c.fmax, fmax_ce3_8064v2,
-			sizeof(ce3_src_clk.c.fmax));
-		memcpy(sdc1_clk.c.fmax, fmax_sdc1_8064v2,
-			sizeof(sdc1_clk.c.fmax));
+		vcodec_clk.c.fmax = fmax_vcodec_8064v2;
+		ce3_src_clk.c.fmax = fmax_ce3_8064v2;
+		sdc1_clk.c.fmax = fmax_sdc1_8064v2;
 	}
 	if (soc_class_is_apq8064()) {
 		ijpeg_clk.c.fmax = fmax_ijpeg_8064;
