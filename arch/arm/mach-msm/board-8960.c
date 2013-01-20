@@ -1696,6 +1696,11 @@ static uint8_t spm_retention_cmd_sequence[] __initdata = {
 			0x0B, 0x00, 0x0f,
 };
 
+static uint8_t spm_retention_cmd_sequence[] __initdata = {
+			0x00, 0x05, 0x03, 0x0D,
+			0x0B, 0x00, 0x0f,
+};
+
 static uint8_t spm_power_collapse_without_rpm[] __initdata = {
 	0x00, 0x24, 0x54, 0x10,
 	0x09, 0x03, 0x01,
@@ -1714,71 +1719,6 @@ static uint8_t spm_power_collapse_with_rpm[] __initdata = {
 static uint8_t spm_power_collapse_without_rpm_krait_v3[] __initdata = {
 	0x00, 0x24, 0x84, 0x10,
 	0x09, 0x03, 0x01,
-	0x10, 0x84, 0x30, 0x0C,
-	0x24, 0x30, 0x0f,
-};
-
-static struct msm_spm_seq_entry msm_spm_boot_cpu_seq_list[] __initdata = {
-	[0] = {
-		.mode = MSM_SPM_MODE_CLOCK_GATING,
-		.notify_rpm = false,
-		.cmd = spm_wfi_cmd_sequence,
-	},
-
-	[1] = {
-		.mode = MSM_SPM_MODE_POWER_RETENTION,
-		.notify_rpm = false,
-		.cmd = spm_retention_cmd_sequence,
-	},
-
-	[2] = {
-		.mode = MSM_SPM_MODE_POWER_COLLAPSE,
-		.notify_rpm = false,
-		.cmd = spm_power_collapse_without_rpm,
-	},
-	[3] = {
-		.mode = MSM_SPM_MODE_POWER_COLLAPSE,
-		.notify_rpm = true,
-		.cmd = spm_power_collapse_with_rpm,
-	},
-};
-
-static struct msm_spm_seq_entry msm_spm_boot_cpu_seq_list[] __initdata = {
-	[0] = {
-		.mode = MSM_SPM_MODE_CLOCK_GATING,
-		.notify_rpm = false,
-		.cmd = spm_wfi_cmd_sequence,
-	},
-
-	[1] = {
-		.mode = MSM_SPM_MODE_POWER_RETENTION,
-		.notify_rpm = false,
-		.cmd = spm_retention_cmd_sequence,
-	},
-
-	[2] = {
-		.mode = MSM_SPM_MODE_POWER_COLLAPSE,
-		.notify_rpm = false,
-		.cmd = spm_power_collapse_without_rpm,
-	},
-	[3] = {
-		.mode = MSM_SPM_MODE_POWER_COLLAPSE,
-		.notify_rpm = true,
-		.cmd = spm_power_collapse_with_rpm,
-	},
-};
-
-/* 8960AB has a different command to assert apc_pdn */
-static uint8_t spm_power_collapse_without_rpm_krait_v3[] __initdata = {
-	0x00, 0x24, 0x84, 0x10,
-	0x09, 0x03, 0x01,
-	0x10, 0x84, 0x30, 0x0C,
-	0x24, 0x30, 0x0f,
-};
-
-static uint8_t spm_power_collapse_with_rpm_krait_v3[] __initdata = {
-	0x00, 0x24, 0x84, 0x10,
-	0x09, 0x07, 0x01, 0x0B,
 	0x10, 0x84, 0x30, 0x0C,
 	0x24, 0x30, 0x0f,
 };
