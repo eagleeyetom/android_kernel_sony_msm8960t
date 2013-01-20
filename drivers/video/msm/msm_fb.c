@@ -980,6 +980,12 @@ static int msm_fb_blank_sub(int blank_mode, struct fb_info *info,
 
 			bl_updated = 0;
 
+			if (mfd->msmfb_no_update_notify_timer.function)
+				del_timer(&mfd->msmfb_no_update_notify_timer);
+			complete(&mfd->msmfb_no_update_notify);
+
+			bl_updated = 0;
+
 			msleep(16);
 			ret = pdata->off(mfd->pdev);
 			if (ret)
@@ -3099,6 +3105,9 @@ static int msmfb_overlay_play(struct fb_info *info, unsigned long *argp)
 	int	ret;
 	struct msmfb_overlay_data req;
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+
+	if (!mfd->panel_power_on) /* suspended */
+		return -EPERM;
 
 	if (!mfd->panel_power_on) /* suspended */
 		return -EPERM;
