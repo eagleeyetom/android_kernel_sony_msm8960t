@@ -3136,6 +3136,9 @@ static int msmfb_overlay_play(struct fb_info *info, unsigned long *argp)
 	if (!mfd->panel_power_on) /* suspended */
 		return -EPERM;
 
+	if (!mfd->panel_power_on) /* suspended */
+		return -EPERM;
+
 	if (mfd->overlay_play_enable == 0)	/* nothing to do */
 		return 0;
 
