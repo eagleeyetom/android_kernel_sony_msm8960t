@@ -184,13 +184,6 @@ struct pm8921_charger_platform_data {
 	enum pm8921_chg_hot_thr		hot_thr;
 	int				rconn_mohm;
 	enum pm8921_chg_led_src_config	led_src_config;
-	int				battery_less_hardware;
-	int				btc_override;
-	int				btc_override_cold_degc;
-	int				btc_override_hot_degc;
-	int				btc_delay_ms;
-	int				btc_panic_if_cant_stop_chg;
-	int				soc_scaling;
 };
 
 enum pm8921_charger_source {
