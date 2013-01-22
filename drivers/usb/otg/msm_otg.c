@@ -3232,9 +3232,6 @@ static void msm_pmic_id_status_w(struct work_struct *w)
 						pmic_id_status_work.work);
 	int work = 0;
 
-	if (aca_id_turned_on)
-		return;
-
 	if (msm_otg_read_pmic_id_state(motg)) {
 		if (!test_and_set_bit(ID, &motg->inputs)) {
 			pr_info("PMIC: ID set\n");
