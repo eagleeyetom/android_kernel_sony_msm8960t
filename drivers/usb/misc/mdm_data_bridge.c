@@ -996,7 +996,7 @@ static void bridge_disconnect(struct usb_interface *intf)
 	ctrl_bridge_disconnect(dev->id);
 	platform_device_unregister(dev->pdev);
 	usb_set_intfdata(intf, NULL);
-	__dev[dev->id] = NULL;
+	__dev[chid] = NULL;
 
 	/*free rx urbs*/
 	head = &dev->rx_idle;
