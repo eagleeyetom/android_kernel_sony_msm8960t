@@ -47,7 +47,11 @@
 /* Context has caused a GPU hang and recovered properly */
 #define CTXT_FLAGS_GPU_HANG_RECOVERED	0x00008000
 /* Context is being destroyed so dont save it */
-#define CTXT_FLAGS_BEING_DESTOYED	0x00010000
+#define CTXT_FLAGS_BEING_DESTROYED	BIT(13)
+/* User mode generated timestamps enabled */
+#define CTXT_FLAGS_USER_GENERATED_TS    BIT(14)
+/* Context skip till EOF */
+#define CTXT_FLAGS_SKIP_EOF             BIT(15)
 
 struct kgsl_device;
 struct adreno_device;
