@@ -308,8 +308,8 @@ static void do_epoch_check(struct subsys_device *dev)
 
 	if (time_first && n >= max_restarts_check) {
 		if ((curr_time->tv_sec - time_first->tv_sec) <
-				max_history_time_check)
-			panic("Subsystems have crashed %d times in less than "
+				max_history_time_check) {
+			WARN(1, "Subsystems have crashed %d times in less than "\
 				"%ld seconds!", max_restarts_check,
 				max_history_time_check);
 	}
@@ -347,8 +347,8 @@ static void subsystem_shutdown(struct subsys_device *dev, void *data)
 	const char *name = dev->desc->name;
 
 	pr_info("[%p]: Shutting down %s\n", current, name);
-	if (dev->desc->shutdown(dev->desc) < 0)
-		panic("subsys-restart: [%p]: Failed to shutdown %s!",
+	if (dev->desc->shutdown(dev->desc) < 0) {
+		WARN(1, "subsys-restart: [%p]: Failed to shutdown %s!",
 			current, name);
 	subsys_set_state(dev, SUBSYS_OFFLINE);
 }
@@ -367,27 +367,9 @@ static void subsystem_powerup(struct subsys_device *dev, void *data)
 	const char *name = dev->desc->name;
 
 	pr_info("[%p]: Powering up %s\n", current, name);
-	if (dev->desc->powerup(dev->desc) < 0)
-		panic("[%p]: Failed to powerup %s!", current, name);
-	subsys_set_state(dev, SUBSYS_ONLINE);
-}
-
-static int __find_subsys(struct device *dev, void *data)
-{
-	struct subsys_device *subsys = to_subsys(dev);
-	return !strcmp(subsys->desc->name, data);
-}
-
-static struct subsys_device *find_subsys(const char *str)
-{
-	struct device *dev;
-
-	if (!str)
-		return NULL;
-
-	dev = bus_find_device(&subsys_bus_type, NULL, (void *)str,
-			__find_subsys);
-	return dev ? to_subsys(dev) : NULL;
+	if (dev->desc->powerup(dev->desc) < 0) {
+		WARN(1, "[%p]: Failed to powerup %s!", current, name);
+	}
 }
 
 static void subsystem_restart_wq_func(struct work_struct *work)
@@ -442,8 +424,8 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 	 * who initiated the original restart but has crashed while the restart
 	 * order is being rebooted.
 	 */
-	if (!mutex_trylock(powerup_lock))
-		panic("%s[%p]: Subsystem died during powerup!",
+	if (!mutex_trylock(powerup_lock)) {
+		WARN(1, "%s[%p]: Subsystem died during powerup!",
 						__func__, current);
 
 	do_epoch_check(dev);
