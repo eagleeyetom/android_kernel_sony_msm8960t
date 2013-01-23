@@ -2474,7 +2474,6 @@ static void msm_otg_sm_work(struct work_struct *w)
 		} else {
 			pr_debug("chg_work cancel");
 			clear_bit(A_BUS_REQ, &motg->inputs);
-			cancel_work_sync(&motg->chg_recheck_stop_work);
 			cancel_delayed_work_sync(&motg->chg_work);
 			motg->chg_state = USB_CHG_STATE_UNDEFINED;
 			motg->chg_type = USB_INVALID_CHARGER;
