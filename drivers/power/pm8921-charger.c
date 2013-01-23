@@ -2400,6 +2400,10 @@ static void pm8921_charger_vbus_draw_local(
 	if (usb_max_cur_ma[SRC_ID_OTG] != USB_WALL_THRESHOLD_MA)
 		usb_target_ma = mA;
 
+	if (usb_target_ma)
+		usb_target_ma = mA;
+
+	spin_lock_irqsave(&vbus_lock, flags);
 	if (the_chip) {
 		if (mA > USB_WALL_THRESHOLD_MA)
 			__pm8921_charger_vbus_draw(USB_WALL_THRESHOLD_MA);
@@ -3383,6 +3387,8 @@ static void unplug_check_worker(struct work_struct *work)
 		/* only increase iusb_max if vin loop not active */
 		if (usb_ma < usb_target_ma) {
 			increase_usb_ma_value(&usb_ma);
+			if (usb_ma > usb_target_ma)
+				usb_ma = usb_target_ma;
 			__pm8921_charger_vbus_draw(usb_ma);
 			pr_debug("usb_now=%d, usb_target = %d\n",
 					usb_ma, usb_target_ma);
