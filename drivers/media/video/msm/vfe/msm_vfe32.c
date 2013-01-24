@@ -5624,6 +5624,25 @@ void msm_vfe_subdev_release(struct v4l2_subdev *sd)
 		vfe32_ctrl->share_ctrl->vfebase);
 }
 
+int msm_axi_set_low_power_mode(struct v4l2_subdev *sd, void *arg)
+{
+	uint8_t lp_mode = 0;
+	int rc = 0;
+	struct axi_ctrl_t *axi_ctrl = v4l2_get_subdevdata(sd);
+	if (copy_from_user(&lp_mode,
+		(void __user *)(arg),
+		sizeof(uint8_t))) {
+		rc = -EFAULT;
+		return rc;
+	}
+	axi_ctrl->share_ctrl->lp_mode = lp_mode;
+	if (lp_mode)
+		axi_ctrl->share_ctrl->dual_enabled = 0;
+	else
+		axi_ctrl->share_ctrl->dual_enabled = 1;
+	return rc;
+}
+
 void axi_abort(struct axi_ctrl_t *axi_ctrl)
 {
 	uint8_t  axi_busy_flag = true;

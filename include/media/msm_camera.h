@@ -995,13 +995,9 @@ struct msm_snapshot_pp_status {
 #define CFG_CONFIG_VREG_ARRAY         52
 #define CFG_CONFIG_CLK_ARRAY          53
 #define CFG_GPIO_OP                   54
-/* extension begin */
-#define CFG_SET_GPIO_CTRL		      55
-#define CFG_SET_WRITE_CMD		      56
-#define CFG_SET_READ_CMD		      57
-#define CFG_GET_ROM			58
-/* extension end */
-#define CFG_MAX                       59
+#define CFG_SET_VISION_MODE           55
+#define CFG_SET_VISION_AE             56
+#define CFG_MAX                       57
 
 
 #define MOVE_NEAR	0
@@ -1689,11 +1685,8 @@ struct sensor_cfg_data {
 		int is_autoflash;
 		struct mirror_flip mirror_flip;
 		void *setting;
-		/* extension begin */
-		struct sensor_gpio_ctrl gpio_ctrl;
-		struct sensor_i2c_io i2c_io;
-		struct sensor_rom_in rom_in;
-		/* extension end */
+		int32_t vision_mode_enable;
+		int32_t vision_ae;
 	} cfg;
 };
 
