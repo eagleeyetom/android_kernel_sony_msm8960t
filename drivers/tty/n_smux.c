@@ -84,11 +84,6 @@ module_param_named(simulate_wakeup_delay, smux_simulate_wakeup_delay,
 			IPC_LOG_STR(x);  \
 } while (0)
 
-#define SMUX_ERR(x...) do {                              \
-	pr_err(x); \
-	IPC_LOG_STR(x);  \
-} while (0)
-
 #define SMUX_PWR(x...) do {                              \
 	if (smux_debug_mask & MSM_SMUX_POWER_INFO) \
 			IPC_LOG_STR(x);  \
@@ -296,30 +291,8 @@ static const char * const smux_events[] = {
 	[SMUX_RX_RETRY_LOW_WM_HIT] = "RX_RETRY_LOW_WM_HIT",
 };
 
-static const char * const smux_local_state[] = {
-	[SMUX_LCH_LOCAL_CLOSED] = "CLOSED",
-	[SMUX_LCH_LOCAL_OPENING] = "OPENING",
-	[SMUX_LCH_LOCAL_OPENED] = "OPENED",
-	[SMUX_LCH_LOCAL_CLOSING] = "CLOSING",
-};
-
-static const char * const smux_remote_state[] = {
-	[SMUX_LCH_REMOTE_CLOSED] = "CLOSED",
-	[SMUX_LCH_REMOTE_OPENED] = "OPENED",
-};
-
-static const char * const smux_mode[] = {
-	[SMUX_LCH_MODE_NORMAL] = "N",
-	[SMUX_LCH_MODE_LOCAL_LOOPBACK] = "L",
-	[SMUX_LCH_MODE_REMOTE_LOOPBACK] = "R",
-};
-
-static const char * const smux_undef[] = {
-	[SMUX_UNDEF_LONG] = "UNDEF",
-	[SMUX_UNDEF_SHORT] = "U",
-};
-
 static void *log_ctx;
+
 static void smux_notify_local_fn(struct work_struct *work);
 static DECLARE_WORK(smux_notify_local, smux_notify_local_fn);
 
@@ -1976,20 +1949,10 @@ static void smux_rx_handle_idle(const unsigned char *data,
 			break;
 		case SMUX_WAKEUP_REQ:
 			SMUX_PWR("smux: smux: RX Wakeup REQ\n");
-			if (unlikely(!smux.remote_is_alive)) {
-				mutex_lock(&smux.mutex_lha0);
-				smux.remote_is_alive = 1;
-				mutex_unlock(&smux.mutex_lha0);
-			}
 			smux_handle_wakeup_req();
 			break;
 		case SMUX_WAKEUP_ACK:
 			SMUX_PWR("smux: smux: RX Wakeup ACK\n");
-			if (unlikely(!smux.remote_is_alive)) {
-				mutex_lock(&smux.mutex_lha0);
-				smux.remote_is_alive = 1;
-				mutex_unlock(&smux.mutex_lha0);
-			}
 			smux_handle_wakeup_ack();
 			break;
 		default:
@@ -3814,7 +3777,7 @@ static int __init smux_init(void)
 
 	log_ctx = ipc_log_context_create(1, "smux");
 	if (!log_ctx) {
-		SMUX_ERR("%s: unable to create log context\n", __func__);
+		pr_err("%s: unable to create log context\n", __func__);
 		disable_ipc_logging = 1;
 	}
 
