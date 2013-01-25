@@ -69,6 +69,18 @@ const unsigned int a3xx_registers[] = {
 
 const unsigned int a3xx_registers_count = ARRAY_SIZE(a3xx_registers) / 2;
 
+/* Removed the following HLSQ register ranges from being read during
+ * fault tolerance since reading the registers may cause the device to hang:
+ */
+const unsigned int a3xx_hlsq_registers[] = {
+	0x0e00, 0x0e05, 0x0e0c, 0x0e0c, 0x0e22, 0x0e23,
+	0x2200, 0x2212, 0x2214, 0x2217, 0x221a, 0x221a,
+	0x2600, 0x2612, 0x2614, 0x2617, 0x261a, 0x261a,
+};
+
+const unsigned int a3xx_hlsq_registers_count =
+			ARRAY_SIZE(a3xx_hlsq_registers) / 2;
+
 /* The set of additional registers to be dumped for A330 */
 
 const unsigned int a330_registers[] = {

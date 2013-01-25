@@ -103,6 +103,7 @@ KGSL_DEBUGFS_LOG(cmd_log);
 KGSL_DEBUGFS_LOG(ctxt_log);
 KGSL_DEBUGFS_LOG(mem_log);
 KGSL_DEBUGFS_LOG(pwr_log);
+KGSL_DEBUGFS_LOG(ft_log);
 
 void kgsl_device_debugfs_init(struct kgsl_device *device)
 {
@@ -118,6 +119,7 @@ void kgsl_device_debugfs_init(struct kgsl_device *device)
 	device->drv_log = KGSL_LOG_LEVEL_DEFAULT;
 	device->mem_log = KGSL_LOG_LEVEL_DEFAULT;
 	device->pwr_log = KGSL_LOG_LEVEL_DEFAULT;
+	device->ft_log = KGSL_LOG_LEVEL_DEFAULT;
 
 	debugfs_create_file("log_level_cmd", 0644, device->d_debugfs, device,
 			    &cmd_log_fops);
@@ -129,6 +131,8 @@ void kgsl_device_debugfs_init(struct kgsl_device *device)
 				&mem_log_fops);
 	debugfs_create_file("log_level_pwr", 0644, device->d_debugfs, device,
 				&pwr_log_fops);
+	debugfs_create_file("log_level_ft", 0644, device->d_debugfs, device,
+				&ft_log_fops);
 
 	/* Create postmortem dump control files */
 
