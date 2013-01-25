@@ -2014,6 +2014,7 @@ void diagfwd_exit(void)
 	platform_driver_unregister(&msm_smd_ch1_driver);
 	platform_driver_unregister(&msm_diag_dci_driver);
 	platform_driver_unregister(&diag_smd_lite_driver);
+
 	kfree(driver->buf_msg_mask_update);
 	kfree(driver->buf_log_mask_update);
 	kfree(driver->buf_event_mask_update);
