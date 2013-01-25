@@ -84,6 +84,11 @@ module_param_named(simulate_wakeup_delay, smux_simulate_wakeup_delay,
 			IPC_LOG_STR(x);  \
 } while (0)
 
+#define SMUX_ERR(x...) do {                              \
+	pr_err(x); \
+	IPC_LOG_STR(x);  \
+} while (0)
+
 #define SMUX_PWR(x...) do {                              \
 	if (smux_debug_mask & MSM_SMUX_POWER_INFO) \
 			IPC_LOG_STR(x);  \
