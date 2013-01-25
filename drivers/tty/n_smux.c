@@ -291,8 +291,30 @@ static const char * const smux_events[] = {
 	[SMUX_RX_RETRY_LOW_WM_HIT] = "RX_RETRY_LOW_WM_HIT",
 };
 
-static void *log_ctx;
+static const char * const smux_local_state[] = {
+	[SMUX_LCH_LOCAL_CLOSED] = "CLOSED",
+	[SMUX_LCH_LOCAL_OPENING] = "OPENING",
+	[SMUX_LCH_LOCAL_OPENED] = "OPENED",
+	[SMUX_LCH_LOCAL_CLOSING] = "CLOSING",
+};
 
+static const char * const smux_remote_state[] = {
+	[SMUX_LCH_REMOTE_CLOSED] = "CLOSED",
+	[SMUX_LCH_REMOTE_OPENED] = "OPENED",
+};
+
+static const char * const smux_mode[] = {
+	[SMUX_LCH_MODE_NORMAL] = "N",
+	[SMUX_LCH_MODE_LOCAL_LOOPBACK] = "L",
+	[SMUX_LCH_MODE_REMOTE_LOOPBACK] = "R",
+};
+
+static const char * const smux_undef[] = {
+	[SMUX_UNDEF_LONG] = "UNDEF",
+	[SMUX_UNDEF_SHORT] = "U",
+};
+
+static void *log_ctx;
 static void smux_notify_local_fn(struct work_struct *work);
 static DECLARE_WORK(smux_notify_local, smux_notify_local_fn);
 
