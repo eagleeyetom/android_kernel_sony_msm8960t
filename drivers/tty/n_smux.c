@@ -1976,10 +1976,20 @@ static void smux_rx_handle_idle(const unsigned char *data,
 			break;
 		case SMUX_WAKEUP_REQ:
 			SMUX_PWR("smux: smux: RX Wakeup REQ\n");
+			if (unlikely(!smux.remote_is_alive)) {
+				mutex_lock(&smux.mutex_lha0);
+				smux.remote_is_alive = 1;
+				mutex_unlock(&smux.mutex_lha0);
+			}
 			smux_handle_wakeup_req();
 			break;
 		case SMUX_WAKEUP_ACK:
 			SMUX_PWR("smux: smux: RX Wakeup ACK\n");
+			if (unlikely(!smux.remote_is_alive)) {
+				mutex_lock(&smux.mutex_lha0);
+				smux.remote_is_alive = 1;
+				mutex_unlock(&smux.mutex_lha0);
+			}
 			smux_handle_wakeup_ack();
 			break;
 		default:
