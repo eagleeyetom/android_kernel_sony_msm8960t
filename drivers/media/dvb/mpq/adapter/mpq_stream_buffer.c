@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -123,8 +123,10 @@ int mpq_streambuffer_pkt_write(
 	ssize_t idx;
 	size_t len;
 
-	len =
-		sizeof(struct mpq_streambuffer_packet_header) +
+	if ((NULL == sbuff) || (NULL == packet))
+		return -EINVAL;
+
+	len = sizeof(struct mpq_streambuffer_packet_header) +
 		packet->user_data_len;
 
 	/* Make sure enough space available for packet header */
@@ -163,8 +165,46 @@ ssize_t mpq_streambuffer_data_write(
 	if (unlikely(dvb_ringbuffer_free(&sbuff->raw_data) < len))
 		return -ENOSPC;
 
-	res = dvb_ringbuffer_write(&sbuff->raw_data, buf, len);
-	wake_up_all(&sbuff->raw_data.queue);
+	if (MPQ_STREAMBUFFER_BUFFER_MODE_RING == sbuff->mode) {
+		if (unlikely(dvb_ringbuffer_free(&sbuff->raw_data) < len))
+			return -ENOSPC;
+		/*
+		 * Secure buffers are not permitted to be mapped into kernel
+		 * memory, and so buffer base address may be NULL
+		 */
+		if (NULL == sbuff->raw_data.data)
+			return -EPERM;
+		res = dvb_ringbuffer_write(&sbuff->raw_data, buf, len);
+		wake_up_all(&sbuff->raw_data.queue);
+	} else {
+		/* Linear buffer group */
+		struct mpq_streambuffer_buffer_desc *desc;
+
+		desc = (struct mpq_streambuffer_buffer_desc *)
+				&sbuff->raw_data.data[sbuff->raw_data.pwrite];
+
+		/*
+		 * Secure buffers are not permitted to be mapped into kernel
+		 * memory, and so buffer base address may be NULL
+		 */
+		if (NULL == desc->base)
+			return -EPERM;
+
+		if ((sbuff->pending_buffers_count == sbuff->buffers_num) ||
+			((desc->size - desc->write_ptr) < len)) {
+			MPQ_DVB_ERR_PRINT(
+				"%s: No space available! %d pending buffers out of %d total buffers. write_ptr=%d, size=%d\n",
+				__func__,
+				sbuff->pending_buffers_count,
+				sbuff->buffers_num,
+				desc->write_ptr,
+				desc->size);
+			return -ENOSPC;
+		}
+		memcpy(desc->base + desc->write_ptr, buf, len);
+		desc->write_ptr += len;
+		res = len;
+	}
 
 	return res;
 }
@@ -175,13 +215,30 @@ int mpq_streambuffer_data_write_deposit(
 				struct mpq_streambuffer *sbuff,
 				size_t len)
 {
-	if (unlikely(dvb_ringbuffer_free(&sbuff->raw_data) < len))
-		return -ENOSPC;
+	if (NULL == sbuff)
+		return -EINVAL;
 
-	sbuff->raw_data.pwrite =
-		(sbuff->raw_data.pwrite+len) % sbuff->raw_data.size;
+	if (MPQ_STREAMBUFFER_BUFFER_MODE_RING == sbuff->mode) {
+		if (unlikely(dvb_ringbuffer_free(&sbuff->raw_data) < len))
+			return -ENOSPC;
 
-	wake_up_all(&sbuff->raw_data.queue);
+		DVB_RINGBUFFER_PUSH(&sbuff->raw_data, len);
+		wake_up_all(&sbuff->raw_data.queue);
+	} else {
+		/* Linear buffer group */
+		struct mpq_streambuffer_buffer_desc *desc;
+		desc = (struct mpq_streambuffer_buffer_desc *)
+				&sbuff->raw_data.data[sbuff->raw_data.pwrite];
+
+		if ((sbuff->pending_buffers_count == sbuff->buffers_num) ||
+			 ((desc->size - desc->write_ptr) < len)) {
+			MPQ_DVB_ERR_PRINT(
+				"%s: No space available!\n",
+				__func__);
+			return -ENOSPC;
+		}
+		desc->write_ptr += len;
+	}
 
 	return 0;
 }

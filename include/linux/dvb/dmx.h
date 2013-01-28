@@ -39,6 +39,8 @@
 /* Min recording chunk upon which event is generated */
 #define DMX_REC_BUFF_CHUNK_MIN_SIZE		(100*188)
 
+#define DMX_MAX_DECODER_BUFFER_NUM		(32)
+
 typedef enum
 {
 	DMX_OUT_DECODER, /* Streaming directly to decoder. */
@@ -423,6 +425,20 @@ struct dmx_stc {
 };
 
 
+struct dmx_secure_mode {
+	/*
+	 * Specifies whether secure mode should be set or not for the filter's
+	 * pid. Note that DMX_OUT_TSDEMUX_TAP filters can have more than 1 pid
+	 */
+	int is_secured;
+
+	/* PID to associate with key ladder id */
+	__u16 pid;
+
+	/* key ladder information to associate with the specified pid */
+	__u32 key_ladder_id;
+};
+
 #define DMX_START                _IO('o', 41)
 #define DMX_STOP                 _IO('o', 42)
 #define DMX_SET_FILTER           _IOW('o', 43, struct dmx_sct_filter_params)
@@ -441,6 +457,12 @@ struct dmx_stc {
 #define DMX_RELEASE_DATA		 _IO('o', 57)
 #define DMX_FEED_DATA			 _IO('o', 58)
 #define DMX_SET_PLAYBACK_MODE	 _IOW('o', 59, enum dmx_playback_mode_t)
-#define DMX_GET_EVENT			 _IOR('o', 60, struct dmx_filter_event)
+#define DMX_GET_EVENT		 _IOR('o', 60, struct dmx_filter_event)
+#define DMX_SET_BUFFER_MODE	 _IOW('o', 61, enum dmx_buffer_mode)
+#define DMX_SET_BUFFER		 _IOW('o', 62, struct dmx_buffer)
+#define DMX_SET_DECODER_BUFFER	 _IOW('o', 63, struct dmx_decoder_buffers)
+#define DMX_REUSE_DECODER_BUFFER _IO('o', 64)
+#define DMX_SET_SECURE_MODE	_IOW('o', 65, struct dmx_secure_mode)
+
 
 #endif /*_DVBDMX_H_*/

@@ -158,7 +158,7 @@ struct dvb_demux {
 	uint32_t speed_pkts_cnt; /* for TS speed check */
 
 	enum dmx_tsp_format_t tsp_format;
-	enum dmx_tsp_format_t tsp_out_format;
+	size_t ts_packet_size;
 
 	enum dmx_playback_mode_t playback_mode;
 	int sw_filter_abort;
