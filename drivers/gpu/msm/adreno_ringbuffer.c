@@ -546,6 +546,19 @@ adreno_ringbuffer_addcmds(struct adreno_ringbuffer *rb,
 	if (context->flags & CTXT_FLAGS_PER_CONTEXT_TS)
 		context_id = context->id;
 
+	if ((context && context->flags & CTXT_FLAGS_USER_GENERATED_TS) &&
+			(!(flags & KGSL_CMD_FLAGS_INTERNAL_ISSUE))) {
+		if (timestamp_cmp(rb->timestamp[context_id],
+						timestamp) >= 0) {
+			KGSL_DRV_ERR(rb->device,
+				"Invalid user generated ts <%d:0x%x>, "
+				"less than last issued ts <%d:0x%x>\n",
+				context_id, timestamp, context_id,
+				rb->timestamp[context_id]);
+			return -ERANGE;
+		}
+	}
+
 	/* reserve space to temporarily turn off protected mode
 	*  error checking if needed
 	*/
