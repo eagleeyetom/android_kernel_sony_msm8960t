@@ -3166,6 +3166,9 @@ static int msmfb_overlay_play(struct fb_info *info, unsigned long *argp)
 	if (!mfd->panel_power_on) /* suspended */
 		return -EPERM;
 
+	if (!mfd->panel_power_on) /* suspended */
+		return -EPERM;
+
 	if (mfd->overlay_play_enable == 0)	/* nothing to do */
 		return 0;
 
@@ -3985,6 +3988,17 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 		if (ret)
 			return ret;
 		ret = msmfb_handle_metadata_ioctl(mfd, &mdp_metadata);
+		break;
+
+	case MSMFB_METADATA_GET:
+		ret = copy_from_user(&mdp_metadata, argp, sizeof(mdp_metadata));
+		if (ret)
+			return ret;
+		ret = msmfb_get_metadata(mfd, &mdp_metadata);
+		if (!ret)
+			ret = copy_to_user(argp, &mdp_metadata,
+				sizeof(mdp_metadata));
+
 		break;
 
 	case MSMFB_METADATA_GET:
