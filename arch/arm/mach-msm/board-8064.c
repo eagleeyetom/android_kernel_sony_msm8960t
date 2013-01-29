@@ -3312,20 +3312,6 @@ static void __init register_i2c_devices(void)
 
 }
 
-static void enable_ddr3_regulator(void)
-{
-	static struct regulator *ext_ddr3;
-
-	/* Use MPP7 output state as a flag for PCDDR3 presence. */
-	if (gpio_get_value_cansleep(PM8921_MPP_PM_TO_SYS(7)) > 0) {
-		ext_ddr3 = regulator_get(NULL, "ext_ddr3");
-		if (IS_ERR(ext_ddr3) || ext_ddr3 == NULL)
-			pr_err("Could not get MPP7 regulator\n");
-		else
-			regulator_enable(ext_ddr3);
-	}
-}
-
 static void enable_avc_i2c_bus(void)
 {
 	int avc_i2c_en_mpp = PM8921_MPP_PM_TO_SYS(8);
@@ -3402,25 +3388,8 @@ static void __init apq8064_common_init(void)
 			machine_is_mpq8064_dtv()))
 		platform_add_devices(common_not_mpq_devices,
 			ARRAY_SIZE(common_not_mpq_devices));
-
-	if ((machine_is_mpq8064_cdp() || machine_is_mpq8064_hrd() ||
-			machine_is_mpq8064_dtv()))
-		platform_add_devices(common_mpq_devices,
-			ARRAY_SIZE(common_mpq_devices));
-
-	if (machine_is_apq8064_mtp()) {
-		if (SOCINFO_VERSION_MINOR(platform_version) == 1)
-			platform_add_devices(common_i2s_devices,
-			ARRAY_SIZE(common_i2s_devices));
-	}
-
-	enable_ddr3_regulator();
-	rpmrs_level =
-		msm_rpmrs_levels[MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT];
-	msm_hsic_pdata.swfi_latency = rpmrs_level.latency_us;
-	rpmrs_level =
-		msm_rpmrs_levels[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE];
-	msm_hsic_pdata.standalone_latency = rpmrs_level.latency_us;
+	msm_hsic_pdata.swfi_latency =
+		msm_rpmrs_levels[0].latency_us;
 	if (machine_is_apq8064_mtp()) {
 		msm_hsic_pdata.log2_irq_thresh = 5,
 		apq8064_device_hsic_host.dev.platform_data = &msm_hsic_pdata;
