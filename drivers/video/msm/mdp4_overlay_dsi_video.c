@@ -330,20 +330,6 @@ void mdp4_dsi_video_wait4vsync(int cndx)
 
 	mdp4_video_vsync_irq_ctrl(cndx, 1);
 
-	mdp4_video_vsync_irq_ctrl(cndx, 1);
-
-	mdp4_video_vsync_irq_ctrl(cndx, 1);
-
-	mdp4_video_vsync_irq_ctrl(cndx, 1);
-
-	mdp4_video_vsync_irq_ctrl(cndx, 1);
-
-	mdp4_video_vsync_irq_ctrl(cndx, 1);
-
-	mdp4_video_vsync_irq_ctrl(cndx, 1);
-
-	mdp4_video_vsync_irq_ctrl(cndx, 1);
-
 	spin_lock_irqsave(&vctrl->spin_lock, flags);
 	if (vctrl->wait_vsync_cnt == 0)
 		INIT_COMPLETION(vctrl->vsync_comp);
@@ -613,6 +599,7 @@ int mdp4_dsi_video_on(struct platform_device *pdev)
 	pipe->dst_w = fbi->var.xres;
 
 	mdp4_overlay_mdp_pipe_req(pipe, mfd);
+	mdp4_calc_blt_mdp_bw(mfd, pipe);
 
 	mdp4_overlay_dmap_xy(pipe);	/* dma_p */
 	mdp4_overlay_dmap_cfg(mfd, 1);
