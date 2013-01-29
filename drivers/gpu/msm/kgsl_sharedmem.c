@@ -524,24 +524,6 @@ _kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 	void *ptr;
 	unsigned int align;
 
-	/*
-	 * Get the current memory information to be used in deciding if we
-	 * should go ahead with this allocation
-	 */
-
-	si_meminfo(&si);
-
-	/*
-	 * Limit the size of the allocation to the amount of free memory minus
-	 * 32MB. Why 32MB?  Because thats the buffer that page_alloc uses and
-	 * it just seems like a reasonable limit that won't make the OOM killer
-	 * go all serial on us.  Of course, if we are down this low all bets
-	 * are off but above all do no harm.
-	 */
-
-	if (size >= ((si.freeram << PAGE_SHIFT) - SZ_32M))
-		return -ENOMEM;
-
 	align = (memdesc->flags & KGSL_MEMALIGN_MASK) >> KGSL_MEMALIGN_SHIFT;
 
 	page_size = (align >= ilog2(SZ_64K) && size >= SZ_64K)
@@ -631,6 +613,14 @@ _kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 				page_size = PAGE_SIZE;
 				continue;
 			}
+
+			KGSL_CORE_ERR(
+				"Out of memory: only allocated %dKB of %dKB requested\n",
+				(size - len) >> 10, size >> 10);
+
+			ret = -ENOMEM;
+			goto done;
+		}
 
 			KGSL_CORE_ERR(
 				"Out of memory: only allocated %dKB of %dKB requested\n",
