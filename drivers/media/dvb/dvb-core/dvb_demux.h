@@ -90,6 +90,8 @@ struct dvb_demux_feed {
 	u16 pid;
 	u8 *buffer;
 	int buffer_size;
+	enum dmx_tsp_format_t tsp_out_format;
+	struct dmx_secure_mode secure_mode;
 
 	struct timespec timeout;
 	struct dvb_demux_filter *filter;
@@ -127,6 +129,10 @@ struct dvb_demux {
 	int (*decoder_fullness_abort)(struct dvb_demux_feed *feed);
 	int (*decoder_buffer_status)(struct dvb_demux_feed *feed,
 				struct dmx_buffer_status *dmx_buffer_status);
+	int (*reuse_decoder_buffer)(struct dvb_demux_feed *feed,
+				int cookie);
+	int (*set_secure_mode)(struct dvb_demux_feed *feed,
+				struct dmx_secure_mode *secure_mode);
 	u32 (*check_crc32)(struct dvb_demux_feed *feed,
 			    const u8 *buf, size_t len);
 	void (*memcopy)(struct dvb_demux_feed *feed, u8 *dst,
