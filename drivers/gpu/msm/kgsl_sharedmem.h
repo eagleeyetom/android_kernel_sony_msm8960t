@@ -163,6 +163,7 @@ kgsl_allocate(struct kgsl_memdesc *memdesc,
 {
 	if (kgsl_mmu_get_mmutype() == KGSL_MMU_TYPE_NONE)
 		return kgsl_sharedmem_ebimem(memdesc, pagetable, size);
+	memdesc->flags |= (KGSL_MEMTYPE_KERNEL << KGSL_MEMTYPE_SHIFT);
 	return kgsl_sharedmem_page_alloc(memdesc, pagetable, size);
 }
 
