@@ -23,22 +23,14 @@ struct pm8xxx_ccadc_core_data {
 
 /**
  * struct pm8xxx_ccadc_platform_data -
-<<<<<<< HEAD
-=======
  * @ccadc_cdata:	core data for the ccadc driver containing channel info
->>>>>>> 999ee57... msm: power: update power drivers to msm-3.4 tip
  * @r_sense_uohm:		sense resistor value in (micro Ohms)
  * @calib_delay_ms:	how often should the adc calculate gain and offset
  */
 struct pm8xxx_ccadc_platform_data {
-<<<<<<< HEAD
-	int		r_sense_uohm;
-	unsigned int	calib_delay_ms;
-=======
 	struct pm8xxx_ccadc_core_data	ccadc_cdata;
 	int				r_sense_uohm;
 	unsigned int			calib_delay_ms;
->>>>>>> 999ee57... msm: power: update power drivers to msm-3.4 tip
 };
 
 #define CCADC_READING_RESOLUTION_N	542535
