@@ -1843,6 +1843,9 @@ static int get_prop_batt_capacity(struct pm8921_chg_chip *chip)
 	if (chip->battery_less_hardware)
 		return 100;
 
+	if (chip->battery_less_hardware)
+		return 100;
+
 	if (!get_prop_batt_present(chip))
 		percent_soc = voltage_based_capacity(chip);
 	else
@@ -2003,8 +2006,6 @@ static int get_prop_batt_temp(struct pm8921_chg_chip *chip)
 {
 	int rc;
 	struct pm8xxx_adc_chan_result result;
-	if (chip->battery_less_hardware)
-		return 300;
 
 	if (chip->battery_less_hardware)
 		return 300;
@@ -2208,6 +2209,9 @@ static int pm_batt_power_get_property(struct power_supply *psy,
 			val->intval = rc;
 			rc = 0;
 		}
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_MAX:
+		val->intval = get_prop_batt_current_max(chip);
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		val->intval = get_prop_batt_current_max(chip);
@@ -2612,15 +2616,9 @@ EXPORT_SYMBOL_GPL(pm8921_set_usb_power_supply_type);
 
 int pm8921_batt_temperature(void)
 {
-	int err;
-	u8 temp;
-	unsigned long flags = 0;
-
-	spin_lock_irqsave(&lpm_lock, flags);
-	err = pm8921_chg_set_lpm(chip, 0);
-	if (err) {
-		pr_err("Error settig LPM rc=%d\n", err);
-		goto kick_err;
+	if (!the_chip) {
+		pr_err("called before init\n");
+		return -EINVAL;
 	}
 	return get_prop_batt_temp(the_chip);
 }
