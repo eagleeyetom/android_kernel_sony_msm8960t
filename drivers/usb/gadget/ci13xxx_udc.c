@@ -417,7 +417,7 @@ static int hw_ep_flush(int num, int dir)
 	int n = hw_ep_bit(num, dir);
 	struct ci13xxx_ep *mEp = &_udc->ci13xxx_ep[n];
 
-	if (_udc->skip_flush || list_empty(&mEp->qh.queue))
+	if (list_empty(&mEp->qh.queue))
 		return 0;
 
 	start = ktime_get();
