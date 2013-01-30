@@ -1849,6 +1849,9 @@ static int get_prop_batt_capacity(struct pm8921_chg_chip *chip)
 	if (chip->battery_less_hardware)
 		return 100;
 
+	if (chip->battery_less_hardware)
+		return 100;
+
 	if (!get_prop_batt_present(chip))
 		percent_soc = voltage_based_capacity(chip);
 	else
@@ -2009,6 +2012,9 @@ static int get_prop_batt_temp(struct pm8921_chg_chip *chip)
 {
 	int rc;
 	struct pm8xxx_adc_chan_result result;
+
+	if (chip->battery_less_hardware)
+		return 300;
 
 	if (chip->battery_less_hardware)
 		return 300;
@@ -2215,6 +2221,9 @@ static int pm_batt_power_get_property(struct power_supply *psy,
 			val->intval = rc;
 			rc = 0;
 		}
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_MAX:
+		val->intval = get_prop_batt_current_max(chip);
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		val->intval = get_prop_batt_current_max(chip);
