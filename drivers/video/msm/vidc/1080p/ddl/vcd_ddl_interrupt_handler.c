@@ -1262,6 +1262,15 @@ static u32 ddl_decoder_output_done_callback(
 		if (decoder->codec.codec != VCD_CODEC_H264 &&
 			decoder->codec.codec != VCD_CODEC_MPEG2)
 			output_vcd_frm->flags &= ~VCD_FRAME_FLAG_DATACORRUPT;
+		if (decoder->codec.codec == VCD_CODEC_MPEG2) {
+			vidc_sm_get_mp2common_status(&ddl->shared_mem
+				[ddl->command_channel],
+				&seq_end_code_present);
+			if (seq_end_code_present)
+				output_vcd_frm->flags |= VCD_FRAME_FLAG_EOSEQ;
+			else
+				output_vcd_frm->flags &= ~VCD_FRAME_FLAG_EOSEQ;
+		}
 		output_vcd_frm->ip_frm_tag = dec_disp_info->tag_top;
 		vidc_sm_get_picture_times(&ddl->shared_mem
 			[ddl->command_channel],
