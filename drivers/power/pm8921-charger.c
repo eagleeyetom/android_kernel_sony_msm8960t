@@ -1829,39 +1829,13 @@ static int get_prop_batt_status(struct pm8921_chg_chip *chip)
 
 static int get_prop_batt_capacity(struct pm8921_chg_chip *chip)
 {
-	int batt_state = POWER_SUPPLY_STATUS_DISCHARGING;
-	int fsm_state = pm_chg_get_fsm_state(chip);
-	int i;
-
-	if (chip->battery_less_hardware)
-		return 100;
-
-	if (!get_prop_batt_present(chip))
-		percent_soc = voltage_based_capacity(chip);
-	else
-		percent_soc = pm8921_bms_get_percent_charge();
-
-	for (i = 0; i < ARRAY_SIZE(map); i++)
-		if (map[i].fsm_state == fsm_state)
-			batt_state = map[i].batt_state;
-
-	if (fsm_state == FSM_STATE_ON_CHG_HIGHI_1) {
-		if (!pm_chg_get_rt_status(chip, BATT_INSERTED_IRQ)
-			|| !pm_chg_get_rt_status(chip, BAT_TEMP_OK_IRQ)
-			|| pm_chg_get_rt_status(chip, CHGHOT_IRQ)
-			|| pm_chg_get_rt_status(chip, VBATDET_LOW_IRQ))
-
-			batt_state = POWER_SUPPLY_STATUS_NOT_CHARGING;
-	}
-	return batt_state;
-}
-
-static int get_prop_batt_capacity(struct pm8921_chg_chip *chip)
-{
 	int percent_soc;
 	int vbat_meas_uv;
 	int ibat;
 	int status;
+
+	if (chip->battery_less_hardware)
+		return 100;
 
 	if (chip->battery_less_hardware)
 		return 100;
@@ -2029,6 +2003,8 @@ static int get_prop_batt_temp(struct pm8921_chg_chip *chip)
 {
 	int rc;
 	struct pm8xxx_adc_chan_result result;
+	if (chip->battery_less_hardware)
+		return 300;
 
 	if (chip->battery_less_hardware)
 		return 300;
@@ -2232,6 +2208,9 @@ static int pm_batt_power_get_property(struct power_supply *psy,
 			val->intval = rc;
 			rc = 0;
 		}
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_MAX:
+		val->intval = get_prop_batt_current_max(chip);
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		val->intval = get_prop_batt_current_max(chip);
@@ -2633,9 +2612,15 @@ EXPORT_SYMBOL_GPL(pm8921_set_usb_power_supply_type);
 
 int pm8921_batt_temperature(void)
 {
-	if (!the_chip) {
-		pr_err("called before init\n");
-		return -EINVAL;
+	int err;
+	u8 temp;
+	unsigned long flags = 0;
+
+	spin_lock_irqsave(&lpm_lock, flags);
+	err = pm8921_chg_set_lpm(chip, 0);
+	if (err) {
+		pr_err("Error settig LPM rc=%d\n", err);
+		goto kick_err;
 	}
 	return get_prop_batt_temp(the_chip);
 }
@@ -2751,7 +2736,6 @@ static void handle_usb_insertion_removal(struct pm8921_chg_chip *chip)
 		pm8921_chg_disable_irq(chip, CHG_GONE_IRQ);
 		clear_long_time_chg_failed(chip);
 	}
-
 	bms_notify_check(chip);
 }
 
@@ -3708,18 +3692,7 @@ static void adjust_vdd_max_for_fastchg(struct pm8921_chg_chip *chip,
 	vbat_batt_terminal_mv = vbat_batt_terminal_uv/1000;
 	pm_chg_vddmax_get(the_chip, &programmed_vdd_max);
 
-	if (on_cool_not_charge_full(chip)) {
-		max_voltage_mv = chip->cool_bat_voltage;
-		vdd_max_add_mv = VDD_MAX_INCREASE_COOL_WARM_MV;
-	} else if (on_warm_not_charge_full(chip)) {
-		max_voltage_mv = chip->warm_bat_voltage;
-		vdd_max_add_mv = VDD_MAX_INCREASE_COOL_WARM_MV;
-	} else {
-		max_voltage_mv = chip->max_voltage_mv;
-		vdd_max_add_mv = vdd_max_increase_mv;
-	}
-
-	delta_mv = max_voltage_mv - vbat_batt_terminal_mv;
+	delta_mv =  chip->max_voltage_mv - vbat_batt_terminal_mv;
 
 	adj_vdd_max_mv = programmed_vdd_max + delta_mv;
 	pr_debug("vdd_max needs to be changed by %d mv from %d to %d\n",
