@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -40,7 +40,9 @@ int tspp_open_stream(u32 dev, u32 channel_id, enum tspp_source src,
 int tspp_close_stream(u32 dev, u32 channel_id);
 int tspp_open_channel(u32 dev, u32 channel_id);
 int tspp_close_channel(u32 dev, u32 channel_id);
-int tspp_add_filter(u32 dev, u32 channel_id,	struct tspp_filter *filter);
+int tspp_get_ref_clk_counter(u32 dev,
+	enum tspp_source source, u32 *tcr_counter);
+int tspp_add_filter(u32 dev, u32 channel_id, struct tspp_filter *filter);
 int tspp_remove_filter(u32 dev, u32 channel_id,	struct tspp_filter *filter);
 int tspp_set_key(u32 dev, u32 channel_id, struct tspp_key *key);
 int tspp_register_notification(u32 dev, u32 channel, tspp_notifier *notify,
