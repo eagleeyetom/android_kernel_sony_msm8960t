@@ -1855,6 +1855,9 @@ static int get_prop_batt_capacity(struct pm8921_chg_chip *chip)
 	if (chip->battery_less_hardware)
 		return 100;
 
+	if (chip->battery_less_hardware)
+		return 100;
+
 	if (!get_prop_batt_present(chip))
 		percent_soc = voltage_based_capacity(chip);
 	else
@@ -2015,6 +2018,9 @@ static int get_prop_batt_temp(struct pm8921_chg_chip *chip)
 {
 	int rc;
 	struct pm8xxx_adc_chan_result result;
+
+	if (chip->battery_less_hardware)
+		return 300;
 
 	if (chip->battery_less_hardware)
 		return 300;
@@ -2227,6 +2233,9 @@ static int pm_batt_power_get_property(struct power_supply *psy,
 			val->intval = rc;
 			rc = 0;
 		}
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_MAX:
+		val->intval = get_prop_batt_current_max(chip);
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		val->intval = get_prop_batt_current_max(chip);
@@ -2650,66 +2659,10 @@ int pm8921_batt_temperature(void)
 	return get_prop_batt_temp(the_chip);
 }
 
-static int __pm8921_apply_19p2mhz_kickstart(struct pm8921_chg_chip *chip)
-{
-	int err;
-	u8 temp;
-
-
-	temp  = 0xD1;
-	err = pm8xxx_writeb(chip->dev->parent, CHG_TEST, temp);
-	if (err) {
-		pr_err("Error %d writing %d to addr %d\n", err, temp, CHG_TEST);
-		return err;
-	}
-
-	temp  = 0xD3;
-	err = pm8xxx_writeb(chip->dev->parent, CHG_TEST, temp);
-	if (err) {
-		pr_err("Error %d writing %d to addr %d\n", err, temp, CHG_TEST);
-		return err;
-	}
-
-	temp  = 0xD1;
-	err = pm8xxx_writeb(chip->dev->parent, CHG_TEST, temp);
-	if (err) {
-		pr_err("Error %d writing %d to addr %d\n", err, temp, CHG_TEST);
-		return err;
-	}
-
-	temp  = 0xD5;
-	err = pm8xxx_writeb(chip->dev->parent, CHG_TEST, temp);
-	if (err) {
-		pr_err("Error %d writing %d to addr %d\n", err, temp, CHG_TEST);
-		return err;
-	}
-
-	/* Wait a few clock cycles before re-enabling hw clock switching */
-	udelay(183);
-
-	temp  = 0xD1;
-	err = pm8xxx_writeb(chip->dev->parent, CHG_TEST, temp);
-	if (err) {
-		pr_err("Error %d writing %d to addr %d\n", err, temp, CHG_TEST);
-		return err;
-	}
-
-	temp  = 0xD0;
-	err = pm8xxx_writeb(chip->dev->parent, CHG_TEST, temp);
-	if (err) {
-		pr_err("Error %d writing %d to addr %d\n", err, temp, CHG_TEST);
-		return err;
-	}
-
-	/* Wait for few clock cycles before re-enabling LPM */
-	udelay(32);
-
-	return 0;
-}
-
 static int pm8921_apply_19p2mhz_kickstart(struct pm8921_chg_chip *chip)
 {
 	int err;
+	u8 temp;
 	unsigned long flags = 0;
 
 	spin_lock_irqsave(&lpm_lock, flags);
@@ -2719,7 +2672,53 @@ static int pm8921_apply_19p2mhz_kickstart(struct pm8921_chg_chip *chip)
 		goto kick_err;
 	}
 
-	__pm8921_apply_19p2mhz_kickstart(chip);
+	temp  = 0xD1;
+	err = pm8xxx_writeb(chip->dev->parent, CHG_TEST, temp);
+	if (err) {
+		pr_err("Error %d writing %d to addr %d\n", err, temp, CHG_TEST);
+		goto kick_err;
+	}
+
+	temp  = 0xD3;
+	err = pm8xxx_writeb(chip->dev->parent, CHG_TEST, temp);
+	if (err) {
+		pr_err("Error %d writing %d to addr %d\n", err, temp, CHG_TEST);
+		goto kick_err;
+	}
+
+	temp  = 0xD1;
+	err = pm8xxx_writeb(chip->dev->parent, CHG_TEST, temp);
+	if (err) {
+		pr_err("Error %d writing %d to addr %d\n", err, temp, CHG_TEST);
+		goto kick_err;
+	}
+
+	temp  = 0xD5;
+	err = pm8xxx_writeb(chip->dev->parent, CHG_TEST, temp);
+	if (err) {
+		pr_err("Error %d writing %d to addr %d\n", err, temp, CHG_TEST);
+		goto kick_err;
+	}
+
+	/* Wait a few clock cycles before re-enabling hw clock switching */
+	udelay(183);
+
+	temp  = 0xD1;
+	err = pm8xxx_writeb(chip->dev->parent, CHG_TEST, temp);
+	if (err) {
+		pr_err("Error %d writing %d to addr %d\n", err, temp, CHG_TEST);
+		goto kick_err;
+	}
+
+	temp  = 0xD0;
+	err = pm8xxx_writeb(chip->dev->parent, CHG_TEST, temp);
+	if (err) {
+		pr_err("Error %d writing %d to addr %d\n", err, temp, CHG_TEST);
+		goto kick_err;
+	}
+
+	/* Wait for few clock cycles before re-enabling LPM */
+	udelay(32);
 
 kick_err:
 	err = pm8921_chg_set_lpm(chip, 1);
@@ -4492,13 +4491,10 @@ static int __devinit pm8921_chg_hw_init(struct pm8921_chg_chip *chip)
 	int rc, vdd_safe, fcc_uah, safety_time = DEFAULT_SAFETY_MINUTES;
 
 	spin_lock_init(&lpm_lock);
-
-	if (pm8xxx_get_version(chip->dev->parent) == PM8XXX_VERSION_8921) {
-		rc = __pm8921_apply_19p2mhz_kickstart(chip);
-		if (rc) {
-			pr_err("Failed to apply kickstart rc=%d\n", rc);
-			return rc;
-		}
+	rc = pm8921_apply_19p2mhz_kickstart(chip);
+	if (rc) {
+		pr_err("Failed to apply kickstart rc=%d\n", rc);
+		return rc;
 	}
 
 	detect_battery_removal(chip);
