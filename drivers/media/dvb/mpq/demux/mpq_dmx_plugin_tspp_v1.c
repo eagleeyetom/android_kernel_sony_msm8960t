@@ -846,7 +846,6 @@ static int mpq_tspp_dmx_init(
 	mpq_demux->dmxdev.demux->get_caps = mpq_tspp_dmx_get_caps;
 	mpq_demux->dmxdev.demux->map_buffer = mpq_dmx_map_buffer;
 	mpq_demux->dmxdev.demux->unmap_buffer = mpq_dmx_unmap_buffer;
-	mpq_demux->dmxdev.demux->set_secure_mode = mpq_dmx_set_secure_mode;
 	mpq_demux->dmxdev.demux->write = mpq_dmx_write;
 	result = dvb_dmxdev_init(&mpq_demux->dmxdev, mpq_adapter);
 	if (result < 0) {

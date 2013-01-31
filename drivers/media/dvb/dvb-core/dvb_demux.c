@@ -1179,6 +1179,25 @@ static int dmx_ts_set_indexing_params(
 	struct dmx_ts_feed *ts_feed,
 	struct dmx_indexing_video_params *params)
 {
+	struct dvb_demux_feed *dvbdmxfeed = (struct dvb_demux_feed *)feed;
+	struct dvb_demux *dvbdmx = dvbdmxfeed->demux;
+
+	mutex_lock(&dvbdmx->mutex);
+
+	dvbdmxfeed->secure_mode = *secure_mode;
+
+	if ((dvbdmxfeed->state == DMX_STATE_GO) &&
+		dvbdmxfeed->demux->set_secure_mode)
+		dvbdmxfeed->demux->set_secure_mode(dvbdmxfeed, secure_mode);
+
+	mutex_unlock(&dvbdmx->mutex);
+	return 0;
+}
+
+static int dmx_ts_set_indexing_params(
+	struct dmx_ts_feed *ts_feed,
+	struct dmx_indexing_video_params *params)
+{
 	struct dvb_demux_feed *feed = (struct dvb_demux_feed *)ts_feed;
 
 	memcpy(&feed->indexing_params, params,
@@ -1210,6 +1229,7 @@ static int dvbdmx_allocate_ts_feed(struct dmx_demux *dmx,
 	feed->pes_tei_counter = 0;
 	feed->pes_ts_packets_num = 0;
 	feed->pes_cont_err_counter = 0;
+	feed->secure_mode.is_secured = 0;
 	feed->buffer = NULL;
 	memset(&feed->indexing_params, 0,
 			sizeof(struct dmx_indexing_video_params));
@@ -1855,7 +1875,6 @@ int dvb_dmx_init(struct dvb_demux *dvbdemux)
 	dmx->get_pes_pids = dvbdmx_get_pes_pids;
 
 	dmx->set_tsp_format = dvbdmx_set_tsp_format;
-	dmx->set_secure_mode = NULL;
 
 	mutex_init(&dvbdemux->mutex);
 	spin_lock_init(&dvbdemux->lock);

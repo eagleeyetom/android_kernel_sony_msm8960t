@@ -378,9 +378,6 @@ struct dmx_demux {
 
 	int (*unmap_buffer) (struct dmx_demux *demux,
 			void *priv_handle);
-
-	int (*set_secure_mode) (struct dmx_demux *demux,
-				struct dmx_secure_mode *sec_mode);
 };
 
 #endif /* #ifndef __DEMUX_H */
