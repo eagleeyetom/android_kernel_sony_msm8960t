@@ -1344,13 +1344,6 @@ static int __qseecom_load_fw(struct qseecom_dev_handle *data, char *appname)
 	/* Populate the remaining parameters */
 	load_req.qsee_cmd_id = QSEOS_APP_START_COMMAND;
 	memcpy(load_req.app_name, appname, MAX_APP_NAME_SIZE);
-	ret = qsee_vote_for_clock(CLK_SFPB);
-	if (ret) {
-		kzfree(img_data);
-		pr_warning("Unable to vote for SFPB clock");
-		return -EIO;
-	}
-
 	/* SCM_CALL to load the image */
 	ret = scm_call(SCM_SVC_TZSCHEDULER, 1,	&load_req,
 			sizeof(struct qseecom_load_app_ireq),
@@ -1358,7 +1351,6 @@ static int __qseecom_load_fw(struct qseecom_dev_handle *data, char *appname)
 	kzfree(img_data);
 	if (ret) {
 		pr_err("scm_call to load failed : ret %d\n", ret);
-		qsee_disable_clock_vote(CLK_SFPB);
 		return -EIO;
 	}
 
@@ -1381,8 +1373,6 @@ static int __qseecom_load_fw(struct qseecom_dev_handle *data, char *appname)
 		ret = -EINVAL;
 		break;
 	}
-	qsee_disable_clock_vote(CLK_SFPB);
-
 	return ret;
 }
 
@@ -1498,7 +1488,6 @@ int qseecom_start_app(struct qseecom_handle **handle,
 	/* Populate the structure for sending scm call to load image */
 	data->client.sb_virt = (char *) ion_map_kernel(qseecom.ion_clnt,
 							data->client.ihandle);
-	data->client.user_virt_sb_base = (uint32_t)data->client.sb_virt;
 	data->client.sb_phys = pa;
 	(*handle)->dev = (void *)data;
 	(*handle)->sbuf = (unsigned char *)data->client.sb_virt;
@@ -1601,30 +1590,6 @@ int qseecom_send_command(struct qseecom_handle *handle, void *send_buf,
 	return ret;
 }
 EXPORT_SYMBOL(qseecom_send_command);
-
-int qseecom_set_bandwidth(struct qseecom_handle *handle, bool high)
-{
-	int ret = 0;
-	if ((handle == NULL) || (handle->dev == NULL)) {
-		pr_err("No valid kernel client\n");
-		return -EINVAL;
-	}
-	if (high) {
-		ret = qsee_vote_for_clock(CLK_DFAB);
-		if (ret)
-			pr_err("Failed to vote for DFAB clock%d\n", ret);
-		ret = qsee_vote_for_clock(CLK_SFPB);
-		if (ret) {
-			pr_err("Failed to vote for SFPB clock%d\n", ret);
-			qsee_disable_clock_vote(CLK_DFAB);
-		}
-	} else {
-		qsee_disable_clock_vote(CLK_DFAB);
-		qsee_disable_clock_vote(CLK_SFPB);
-	}
-	return ret;
-}
-EXPORT_SYMBOL(qseecom_set_bandwidth);
 
 static int qseecom_send_resp(void)
 {
