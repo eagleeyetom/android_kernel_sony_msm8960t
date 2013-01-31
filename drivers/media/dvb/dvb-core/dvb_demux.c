@@ -1210,7 +1210,6 @@ static int dvbdmx_allocate_ts_feed(struct dmx_demux *dmx,
 	feed->pes_tei_counter = 0;
 	feed->pes_ts_packets_num = 0;
 	feed->pes_cont_err_counter = 0;
-	feed->secure_mode.is_secured = 0;
 	feed->buffer = NULL;
 	memset(&feed->indexing_params, 0,
 			sizeof(struct dmx_indexing_video_params));
