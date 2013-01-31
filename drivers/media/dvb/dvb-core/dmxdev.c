@@ -2337,10 +2337,36 @@ static int dvb_demux_open(struct inode *inode, struct file *file)
 static int dvb_dmxdev_filter_free(struct dmxdev *dmxdev,
 				  struct dmxdev_filter *dmxdevfilter)
 {
+	struct dmxdev_feed *feed;
+	struct dmx_secure_mode sec_mode;
+
 	mutex_lock(&dmxdev->mutex);
 	mutex_lock(&dmxdevfilter->mutex);
 
 	dvb_dmxdev_filter_stop(dmxdevfilter);
+
+	if (dmxdev->demux->set_secure_mode) {
+		sec_mode.is_secured = 0;
+		switch (dmxdevfilter->type) {
+		case DMXDEV_TYPE_PES:
+			list_for_each_entry(feed,
+					&dmxdevfilter->feed.ts, next) {
+				sec_mode.pid = feed->pid;
+				dmxdev->demux->set_secure_mode(
+					dmxdev->demux, &sec_mode);
+			}
+			break;
+
+		case DMXDEV_TYPE_SEC:
+			sec_mode.pid = dmxdevfilter->params.sec.pid;
+			dmxdev->demux->set_secure_mode(
+				dmxdev->demux, &sec_mode);
+			break;
+
+		default:
+			break;
+		}
+	}
 
 	dvb_dmxdev_filter_reset(dmxdevfilter);
 
@@ -2445,56 +2471,46 @@ static int dvb_dmxdev_set_secure_mode(
 	struct dmx_secure_mode *sec_mode)
 {
 	struct dmxdev_feed *feed;
-	struct dmxdev_feed *ts_feed = NULL;
-	struct dmxdev_sec_feed *sec_feed = NULL;
+	int found = 0;
 
 	if (NULL == dmxdev || NULL == filter || NULL == sec_mode)
 		return -EINVAL;
+	if (NULL == dmxdev->demux->set_secure_mode)
+		return -ENODEV;
 
 	if (filter->state < DMXDEV_STATE_SET ||
 		filter->state > DMXDEV_STATE_GO) {
 		printk(KERN_ERR "%s: invalid filter state\n", __func__);
 		return -EPERM;
 	}
-	dprintk(KERN_DEBUG "%s: key_id=%d, secure=%d, looking for pid=%d\n",
+	dprintk(KERN_DEBUG "%s: key_id=%d, secure=%d, looking for pid=%d...\n",
 		__func__, sec_mode->key_ladder_id, sec_mode->is_secured,
 		sec_mode->pid);
 	switch (filter->type) {
 	case DMXDEV_TYPE_PES:
 		list_for_each_entry(feed, &filter->feed.ts, next) {
 			if (feed->pid == sec_mode->pid) {
-				ts_feed = feed;
-				ts_feed->sec_mode = *sec_mode;
-				if (filter->state == DMXDEV_STATE_GO &&
-					ts_feed->ts->set_secure_mode)
-					ts_feed->ts->set_secure_mode(
-						ts_feed->ts, sec_mode);
+				found = 1;
 				break;
 			}
 		}
 		break;
 	case DMXDEV_TYPE_SEC:
-		if (filter->params.sec.pid == sec_mode->pid) {
-			sec_feed = &filter->feed.sec;
-			sec_feed->sec_mode = *sec_mode;
-			if (filter->state == DMXDEV_STATE_GO &&
-				sec_feed->feed->set_secure_mode)
-				sec_feed->feed->set_secure_mode(sec_feed->feed,
-						sec_mode);
-		}
+		if (filter->params.sec.pid == sec_mode->pid)
+			found = 1;
 		break;
 
 	default:
 		return -EINVAL;
 	}
 
-	if (!ts_feed && !sec_feed) {
+	if (!found) {
 		printk(KERN_ERR "%s: pid %d is undefined for this filter\n",
 			__func__, sec_mode->pid);
 		return -EINVAL;
 	}
 
-	return 0;
+	return dmxdev->demux->set_secure_mode(dmxdev->demux, sec_mode);
 }
 
 static int dvb_dmxdev_pes_filter_set(struct dmxdev *dmxdev,

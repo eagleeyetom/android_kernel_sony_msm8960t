@@ -34,6 +34,21 @@
 #define MPQ_MAX_FOUND_PATTERNS				5
 
 /**
+ * Key ladder information table, manages association of pid with a key ladder
+ * index.
+ * @pid: pid
+ * @keyladder_id: key ladder index associated with the pid
+ * @list: list item pointer
+ * @refs: reference count of how many filters use this association.
+ */
+struct mpq_demux_keyladder_info {
+	u16 pid;
+	u32 keyladder_id;
+	struct list_head list;
+	u16 refs;
+};
+
+/**
  * struct ts_packet_header - Transport packet header
  * as defined in MPEG2 transport stream standard.
  */
@@ -312,6 +327,40 @@ struct mpq_feed {
 };
 
 /**
+ * mpq feed object - mpq common plugin feed information
+ *
+ * @dvb_demux_feed: Back pointer to dvb demux level feed object
+ * @mpq_demux: Pointer to common mpq demux object
+ * @plugin_priv: Plugin specific private data
+ * @sdmx_filter_handle: Secure demux filter handle. Recording feed may share
+ * same filter handle
+ * @secondary_feed: Specifies if this feed shares filter handle with
+ * other feeds
+ * @metadata_buf: Ring buffer object for managing the metadata buffer
+ * @metadata_buf_handle: Allocation handle for the metadata buffer
+ * @sdmx_buf: Ring buffer object for intermediate output data from the sdmx
+ * @sdmx_buf_handle: Allocation handle for the sdmx intermediate data buffer
+ * @video_info: Video feed specific information
+ */
+struct mpq_feed {
+	struct dvb_demux_feed *dvb_demux_feed;
+	struct mpq_demux *mpq_demux;
+	void *plugin_priv;
+
+	/* Secure demux related */
+	int sdmx_filter_handle;
+	int secondary_feed;
+	enum sdmx_filter filter_type;
+	struct dvb_ringbuffer metadata_buf;
+	struct ion_handle *metadata_buf_handle;
+
+	struct dvb_ringbuffer sdmx_buf;
+	struct ion_handle *sdmx_buf_handle;
+
+	struct mpq_video_feed_info video_info;
+};
+
+/**
  * struct mpq_demux - mpq demux information
  * @demux: The dvb_demux instance used by mpq_demux
  * @dmxdev: The dmxdev instance used by mpq_demux
@@ -324,6 +373,8 @@ struct mpq_feed {
  * @feeds: mpq common feed object pool
  * @filters_status: Array holding buffers status for each secure demux filter.
  * Used before each call to sdmx_process() to build up to date state.
+ * @keyladder_list: List head of key ladder table
+ * @secure_mode_count: Number of filters set with secure mode
  * @sdmx_session_handle: Secure demux open session handle
  * @sdmx_filter_count: Number of active secure demux filters
  * @plugin_priv: Underlying plugin's own private data
@@ -367,6 +418,8 @@ struct mpq_demux {
 	struct mutex mutex;
 	struct mpq_feed feeds[MPQ_MAX_DMX_FILES];
 	struct sdmx_filter_status filters_status[MPQ_MAX_DMX_FILES];
+	struct list_head keyladder_list; /* struct mpq_demux_keyladder_info */
+	int secure_mode_count;
 	int sdmx_session_handle;
 	int sdmx_session_ref_count;
 	int sdmx_filter_count;
@@ -666,13 +719,13 @@ void mpq_dmx_update_hw_statistics(struct mpq_demux *mpq_demux);
 /**
  * mpq_dmx_set_secure_mode - Handles set secure mode command from demux device
  *
- * @feed: The feed to set its secure mode
+ * @demux: demux interface
  * @sec_mode: Secure mode details (key ladder info)
  *
  * Return error code
-*/
-int mpq_dmx_set_secure_mode(struct dvb_demux_feed *feed,
-		struct dmx_secure_mode *secure_mode);
+ */
+int mpq_dmx_set_secure_mode(struct dmx_demux *demux,
+	struct dmx_secure_mode *sec_mode);
 
 /**
  * mpq_sdmx_open_session - Handle the details of opening a new secure demux

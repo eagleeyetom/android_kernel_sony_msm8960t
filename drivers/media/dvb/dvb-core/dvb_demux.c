@@ -1758,23 +1758,6 @@ static int dvbdmx_set_tsp_format(
 	return 0;
 }
 
-static int dvbdmx_set_tsp_out_format(
-	struct dmx_demux *demux,
-	enum dmx_tsp_format_t tsp_format)
-{
-	struct dvb_demux *dvbdemux = (struct dvb_demux *)demux;
-
-	if ((tsp_format > DMX_TSP_FORMAT_192_HEAD) ||
-		(tsp_format < DMX_TSP_FORMAT_188))
-		return -EINVAL;
-
-	mutex_lock(&dvbdemux->mutex);
-
-	dvbdemux->tsp_out_format = tsp_format;
-	mutex_unlock(&dvbdemux->mutex);
-	return 0;
-}
-
 int dvb_dmx_init(struct dvb_demux *dvbdemux)
 {
 	int i;
@@ -1872,6 +1855,7 @@ int dvb_dmx_init(struct dvb_demux *dvbdemux)
 	dmx->get_pes_pids = dvbdmx_get_pes_pids;
 
 	dmx->set_tsp_format = dvbdmx_set_tsp_format;
+	dmx->set_secure_mode = NULL;
 
 	mutex_init(&dvbdemux->mutex);
 	spin_lock_init(&dvbdemux->lock);

@@ -116,6 +116,13 @@ static struct
 		int *aggregate_ids;
 
 		/*
+		 * Array holding the IDs of the TSPP buffer descriptors in the
+		 * current aggregate, in order to release these descriptors at
+		 * the end of processing.
+		 */
+		int *aggregate_ids;
+
+		/*
 		 * Holds PIDs of allocated TSPP filters along with
 		 * how many feeds are opened on same PID.
 		 */
@@ -204,13 +211,12 @@ static void mpq_dmx_tspp_aggregated_process(int tsif, int channel_id)
 	struct sdmx_buff_descr input;
 	size_t aggregate_len = 0;
 	size_t aggregate_count = 0;
-	phys_addr_t buff_start_addr;
-	phys_addr_t buff_current_addr;
+	phys_addr_t start_addr = 0;
 	int i;
 
 	while ((tspp_data_desc = tspp_get_buffer(0, channel_id)) != NULL) {
 		if (0 == aggregate_count)
-			buff_current_addr = tspp_data_desc->phys_base;
+			start_addr = tspp_data_desc->phys_base;
 		mpq_dmx_tspp_info.tsif[tsif].aggregate_ids[aggregate_count] =
 			tspp_data_desc->id;
 		aggregate_len += tspp_data_desc->size;
@@ -222,19 +228,12 @@ static void mpq_dmx_tspp_aggregated_process(int tsif, int channel_id)
 	if (!aggregate_count)
 		return;
 
-	buff_start_addr = mpq_dmx_tspp_info.tsif[tsif].ch_mem_heap_phys_base;
-	input.base_addr = (void *)buff_start_addr;
-	input.size = mpq_dmx_tspp_info.tsif[tsif].buffer_count *
-		TSPP_DESCRIPTOR_SIZE;
-
 	MPQ_DVB_DBG_PRINT(
-		"%s: Processing %d descriptors: %d bytes at start address 0x%x, read offset %d\n",
-		__func__, aggregate_count, aggregate_len,
-		(unsigned int)input.base_addr,
-		buff_current_addr - buff_start_addr);
-
-	mpq_sdmx_process(mpq_demux, &input, aggregate_len,
-		 buff_current_addr - buff_start_addr);
+		"%s: Processing %d descriptors: %d bytes at start address 0x%x\n",
+		__func__, aggregate_count, aggregate_len, start_addr);
+	input.base_addr = (void *)start_addr;
+	input.size = aggregate_len;
+	mpq_sdmx_process(mpq_demux, &input, aggregate_len, 0);
 
 	for (i = 0; i < aggregate_count; i++)
 		tspp_release_buffer(0, channel_id,
@@ -275,6 +274,12 @@ static void mpq_dmx_tspp_work(struct work_struct *worker)
 	}
 
 	mpq_demux->hw_notification_size = 0;
+
+		if (MPQ_DMX_TSPP_CONTIGUOUS_PHYS_ALLOC != allocation_mode &&
+			mpq_sdmx_is_loaded())
+			pr_err_once(
+				"%s: TSPP Allocation mode does not support secure demux.\n",
+				__func__);
 
 		if (MPQ_DMX_TSPP_CONTIGUOUS_PHYS_ALLOC != allocation_mode &&
 			mpq_sdmx_is_loaded())
@@ -841,6 +846,7 @@ static int mpq_tspp_dmx_init(
 	mpq_demux->dmxdev.demux->get_caps = mpq_tspp_dmx_get_caps;
 	mpq_demux->dmxdev.demux->map_buffer = mpq_dmx_map_buffer;
 	mpq_demux->dmxdev.demux->unmap_buffer = mpq_dmx_unmap_buffer;
+	mpq_demux->dmxdev.demux->set_secure_mode = mpq_dmx_set_secure_mode;
 	mpq_demux->dmxdev.demux->write = mpq_dmx_write;
 	result = dvb_dmxdev_init(&mpq_demux->dmxdev, mpq_adapter);
 	if (result < 0) {
@@ -972,10 +978,6 @@ static void __exit mpq_dmx_tspp_plugin_exit(void)
 		}
 		if (mpq_dmx_tspp_info.tsif[i].aggregate_ids)
 			vfree(mpq_dmx_tspp_info.tsif[i].aggregate_ids);
-
-		/* TODO: if we allocate buffer
-		 * to TSPP ourself, need to free those as well
-		 */
 
 		mutex_unlock(&mpq_dmx_tspp_info.tsif[i].mutex);
 		flush_workqueue(mpq_dmx_tspp_info.tsif[i].workqueue);
