@@ -123,6 +123,13 @@ static struct
 		int *aggregate_ids;
 
 		/*
+		 * Array holding the IDs of the TSPP buffer descriptors in the
+		 * current aggregate, in order to release these descriptors at
+		 * the end of processing.
+		 */
+		int *aggregate_ids;
+
+		/*
 		 * Holds PIDs of allocated TSPP filters along with
 		 * how many feeds are opened on same PID.
 		 */
@@ -212,7 +219,7 @@ static void mpq_dmx_tspp_aggregated_process(int tsif, int channel_id)
 	size_t aggregate_len = 0;
 	size_t aggregate_count = 0;
 	phys_addr_t buff_start_addr;
-	phys_addr_t buff_current_addr = 0;
+	phys_addr_t buff_current_addr;
 	int i;
 
 	while ((tspp_data_desc = tspp_get_buffer(0, channel_id)) != NULL) {
@@ -282,6 +289,12 @@ static void mpq_dmx_tspp_work(struct work_struct *worker)
 	}
 
 	mpq_demux->hw_notification_size = 0;
+
+		if (MPQ_DMX_TSPP_CONTIGUOUS_PHYS_ALLOC != allocation_mode &&
+			mpq_sdmx_is_loaded())
+			pr_err_once(
+				"%s: TSPP Allocation mode does not support secure demux.\n",
+				__func__);
 
 		if (MPQ_DMX_TSPP_CONTIGUOUS_PHYS_ALLOC != allocation_mode &&
 			mpq_sdmx_is_loaded())

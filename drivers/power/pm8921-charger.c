@@ -4510,15 +4510,6 @@ static int __devinit pm8921_chg_hw_init(struct pm8921_chg_chip *chip)
 		}
 	}
 
-	detect_battery_removal(chip);
-
-	rc = pm_chg_set_irq_perm_user(chip, BATT_INSERTED_IN_BLOCK,
-		BATT_INSERTED_PERM_MARK, BATT_INSERTED_PERM_MARK);
-	if (rc) {
-		pr_err("Failed to set the permission rc=%d\n", rc);
-		return rc;
-	}
-
 	rc = pm_chg_set_irq_perm_user(chip, VBATDET_LOW_IN_BLOCK,
 		VBATDET_LOW_PERM_MARK, VBATDET_LOW_PERM_MARK);
 	if (rc) {

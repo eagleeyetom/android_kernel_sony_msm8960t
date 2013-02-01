@@ -3298,18 +3298,6 @@ static void __init register_i2c_devices(void)
 					mpq8064_i2c_devices[i].info,
 					mpq8064_i2c_devices[i].len);
 	}
-
-	if (machine_is_apq8064_mtp()) {
-		version = socinfo_get_platform_version();
-		if (SOCINFO_VERSION_MINOR(version) == 1)
-			for (i = 0; i < ARRAY_SIZE(apq8064_tabla_i2c_devices);
-				 ++i)
-				i2c_register_board_info(
-				apq8064_tabla_i2c_devices[i].bus,
-				apq8064_tabla_i2c_devices[i].info,
-				apq8064_tabla_i2c_devices[i].len);
-	}
-
 }
 
 static void enable_avc_i2c_bus(void)
