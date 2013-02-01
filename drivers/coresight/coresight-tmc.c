@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -33,7 +33,6 @@
 #include <mach/memory.h>
 #include <mach/sps.h>
 #include <mach/usb_bam.h>
-#include <mach/msm_memory_dump.h>
 
 #include "coresight-priv.h"
 
@@ -51,45 +50,36 @@ do {									\
 	mb();								\
 } while (0)
 
-#define TMC_RSZ				(0x004)
-#define TMC_STS				(0x00C)
-#define TMC_RRD				(0x010)
-#define TMC_RRP				(0x014)
-#define TMC_RWP				(0x018)
-#define TMC_TRG				(0x01C)
-#define TMC_CTL				(0x020)
-#define TMC_RWD				(0x024)
-#define TMC_MODE			(0x028)
-#define TMC_LBUFLEVEL			(0x02C)
-#define TMC_CBUFLEVEL			(0x030)
-#define TMC_BUFWM			(0x034)
-#define TMC_RRPHI			(0x038)
-#define TMC_RWPHI			(0x03C)
-#define TMC_AXICTL			(0x110)
-#define TMC_DBALO			(0x118)
-#define TMC_DBAHI			(0x11C)
-#define TMC_FFSR			(0x300)
-#define TMC_FFCR			(0x304)
-#define TMC_PSCR			(0x308)
-#define TMC_ITMISCOP0			(0xEE0)
-#define TMC_ITTRFLIN			(0xEE8)
-#define TMC_ITATBDATA0			(0xEEC)
-#define TMC_ITATBCTR2			(0xEF0)
-#define TMC_ITATBCTR1			(0xEF4)
-#define TMC_ITATBCTR0			(0xEF8)
+#define TMC_RSZ			(0x004)
+#define TMC_STS			(0x00C)
+#define TMC_RRD			(0x010)
+#define TMC_RRP			(0x014)
+#define TMC_RWP			(0x018)
+#define TMC_TRG			(0x01C)
+#define TMC_CTL			(0x020)
+#define TMC_RWD			(0x024)
+#define TMC_MODE		(0x028)
+#define TMC_LBUFLEVEL		(0x02C)
+#define TMC_CBUFLEVEL		(0x030)
+#define TMC_BUFWM		(0x034)
+#define TMC_RRPHI		(0x038)
+#define TMC_RWPHI		(0x03C)
+#define TMC_AXICTL		(0x110)
+#define TMC_DBALO		(0x118)
+#define TMC_DBAHI		(0x11C)
+#define TMC_FFSR		(0x300)
+#define TMC_FFCR		(0x304)
+#define TMC_PSCR		(0x308)
+#define TMC_ITMISCOP0		(0xEE0)
+#define TMC_ITTRFLIN		(0xEE8)
+#define TMC_ITATBDATA0		(0xEEC)
+#define TMC_ITATBCTR2		(0xEF0)
+#define TMC_ITATBCTR1		(0xEF4)
+#define TMC_ITATBCTR0		(0xEF8)
 
-#define BYTES_PER_WORD			4
-#define TMC_ETR_BAM_PIPE_INDEX		0
-#define TMC_ETR_BAM_NR_PIPES		2
-
-#define TMC_ETFETB_DUMP_MAGIC_OFF	(0)
-#define TMC_ETFETB_DUMP_MAGIC		(0x5D1DB1BF)
-#define TMC_ETFETB_DUMP_VER_OFF		(4)
-#define TMC_ETFETB_DUMP_VER		(1)
-#define TMC_REG_DUMP_MAGIC_OFF		(0)
-#define TMC_REG_DUMP_MAGIC		(0x5D1DB1BF)
-#define TMC_REG_DUMP_VER_OFF		(4)
-#define TMC_REG_DUMP_VER		(1)
+#define BYTES_PER_WORD		4
+#define TMC_ETR_BAM_PIPE_INDEX	0
+#define TMC_ETR_BAM_NR_PIPES	2
 
 enum tmc_config_type {
 	TMC_CONFIG_TYPE_ETB,
@@ -250,7 +240,7 @@ static void __tmc_etr_enable_to_bam(struct tmc_drvdata *drvdata)
 
 	tmc_writel(drvdata, bamdata->data_fifo.phys_base, TMC_DBALO);
 	tmc_writel(drvdata, 0x0, TMC_DBAHI);
-	tmc_writel(drvdata, 0x103, TMC_FFCR);
+	tmc_writel(drvdata, 0x133, TMC_FFCR);
 	tmc_writel(drvdata, drvdata->trigger_cntr, TMC_TRG);
 	__tmc_enable(drvdata);
 
@@ -267,12 +257,7 @@ static int tmc_etr_bam_enable(struct tmc_drvdata *drvdata)
 	if (bamdata->enable)
 		return 0;
 
-	/* Reset bam to start with */
-	ret = sps_device_reset(bamdata->handle);
-	if (ret)
-		goto err0;
-
-	/* Now configure and enable bam */
+	/* Configure and enable ndp bam */
 
 	bamdata->pipe = sps_alloc_endpoint();
 	if (!bamdata->pipe)
@@ -280,7 +265,7 @@ static int tmc_etr_bam_enable(struct tmc_drvdata *drvdata)
 
 	ret = sps_get_config(bamdata->pipe, &bamdata->connect);
 	if (ret)
-		goto err1;
+		goto err;
 
 	bamdata->connect.mode = SPS_MODE_SRC;
 	bamdata->connect.source = bamdata->handle;
@@ -295,13 +280,12 @@ static int tmc_etr_bam_enable(struct tmc_drvdata *drvdata)
 
 	ret = sps_connect(bamdata->pipe, &bamdata->connect);
 	if (ret)
-		goto err1;
+		goto err;
 
 	bamdata->enable = true;
 	return 0;
-err1:
+err:
 	sps_free_endpoint(bamdata->pipe);
-err0:
 	return ret;
 }
 
@@ -310,18 +294,14 @@ static void __tmc_etr_disable_to_bam(struct tmc_drvdata *drvdata)
 	if (!drvdata->enable_to_bam)
 		return;
 
-	/* Ensure periodic flush is disabled in CSR block */
-	msm_qdss_csr_disable_flush();
-
 	TMC_UNLOCK(drvdata);
 
-	tmc_wait_for_flush(drvdata);
 	tmc_flush_and_stop(drvdata);
 	__tmc_disable(drvdata);
 
 	TMC_LOCK(drvdata);
 
-	/* Disable CSR configuration */
+	/* Disable CSR registers */
 	msm_qdss_csr_disable_bam_to_usb();
 	drvdata->enable_to_bam = false;
 }
@@ -1161,7 +1141,6 @@ static int __devinit tmc_probe(struct platform_device *pdev)
 			goto err0;
 		}
 		memset(drvdata->vaddr, 0, drvdata->size);
-		drvdata->buf = drvdata->vaddr;
 		drvdata->out_mode = TMC_ETR_OUT_MODE_MEM;
 
 		ret = tmc_etr_bam_init(pdev, drvdata);
