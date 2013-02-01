@@ -51,41 +51,45 @@ do {									\
 	mb();								\
 } while (0)
 
-#define TMC_RSZ			(0x004)
-#define TMC_STS			(0x00C)
-#define TMC_RRD			(0x010)
-#define TMC_RRP			(0x014)
-#define TMC_RWP			(0x018)
-#define TMC_TRG			(0x01C)
-#define TMC_CTL			(0x020)
-#define TMC_RWD			(0x024)
-#define TMC_MODE		(0x028)
-#define TMC_LBUFLEVEL		(0x02C)
-#define TMC_CBUFLEVEL		(0x030)
-#define TMC_BUFWM		(0x034)
-#define TMC_RRPHI		(0x038)
-#define TMC_RWPHI		(0x03C)
-#define TMC_AXICTL		(0x110)
-#define TMC_DBALO		(0x118)
-#define TMC_DBAHI		(0x11C)
-#define TMC_FFSR		(0x300)
-#define TMC_FFCR		(0x304)
-#define TMC_PSCR		(0x308)
-#define TMC_ITMISCOP0		(0xEE0)
-#define TMC_ITTRFLIN		(0xEE8)
-#define TMC_ITATBDATA0		(0xEEC)
-#define TMC_ITATBCTR2		(0xEF0)
-#define TMC_ITATBCTR1		(0xEF4)
-#define TMC_ITATBCTR0		(0xEF8)
+#define TMC_RSZ				(0x004)
+#define TMC_STS				(0x00C)
+#define TMC_RRD				(0x010)
+#define TMC_RRP				(0x014)
+#define TMC_RWP				(0x018)
+#define TMC_TRG				(0x01C)
+#define TMC_CTL				(0x020)
+#define TMC_RWD				(0x024)
+#define TMC_MODE			(0x028)
+#define TMC_LBUFLEVEL			(0x02C)
+#define TMC_CBUFLEVEL			(0x030)
+#define TMC_BUFWM			(0x034)
+#define TMC_RRPHI			(0x038)
+#define TMC_RWPHI			(0x03C)
+#define TMC_AXICTL			(0x110)
+#define TMC_DBALO			(0x118)
+#define TMC_DBAHI			(0x11C)
+#define TMC_FFSR			(0x300)
+#define TMC_FFCR			(0x304)
+#define TMC_PSCR			(0x308)
+#define TMC_ITMISCOP0			(0xEE0)
+#define TMC_ITTRFLIN			(0xEE8)
+#define TMC_ITATBDATA0			(0xEEC)
+#define TMC_ITATBCTR2			(0xEF0)
+#define TMC_ITATBCTR1			(0xEF4)
+#define TMC_ITATBCTR0			(0xEF8)
 
-#define BYTES_PER_WORD		4
-#define TMC_ETR_BAM_PIPE_INDEX	0
-#define TMC_ETR_BAM_NR_PIPES	2
+#define BYTES_PER_WORD			4
+#define TMC_ETR_BAM_PIPE_INDEX		0
+#define TMC_ETR_BAM_NR_PIPES		2
 
-#define TMC_ETFETB_DUMP_VER_OFF	(4)
-#define TMC_ETFETB_DUMP_VER	(1)
-#define TMC_REG_DUMP_VER_OFF	(4)
-#define TMC_REG_DUMP_VER	(1)
+#define TMC_ETFETB_DUMP_MAGIC_OFF	(0)
+#define TMC_ETFETB_DUMP_MAGIC		(0x5D1DB1BF)
+#define TMC_ETFETB_DUMP_VER_OFF		(4)
+#define TMC_ETFETB_DUMP_VER		(1)
+#define TMC_REG_DUMP_MAGIC_OFF		(0)
+#define TMC_REG_DUMP_MAGIC		(0x5D1DB1BF)
+#define TMC_REG_DUMP_VER_OFF		(4)
+#define TMC_REG_DUMP_VER		(1)
 
 enum tmc_config_type {
 	TMC_CONFIG_TYPE_ETB,
@@ -1157,8 +1161,10 @@ static int __devinit tmc_probe(struct platform_device *pdev)
 		dump.start_addr = virt_to_phys(baddr);
 		dump.end_addr = dump.start_addr + PAGE_SIZE + drvdata->size;
 		ret = msm_dump_table_register(&dump);
-		/* Don't free the buffer in case of error since it can still
-		 * be used to provide dump collection via the device node
+		/*
+		 * Don't free the buffer in case of error since it can still
+		 * be used to provide dump collection via the device node or
+		 * as part of abort.
 		 */
 		if (ret)
 			dev_info(dev, "TMC ETF-ETB dump setup failed\n");
@@ -1167,15 +1173,19 @@ static int __devinit tmc_probe(struct platform_device *pdev)
 
 	baddr = devm_kzalloc(dev, PAGE_SIZE + reg_size, GFP_KERNEL);
 	if (baddr) {
+		drvdata->reg_buf = baddr + PAGE_SIZE;
 		*(uint32_t *)(baddr + TMC_REG_DUMP_VER_OFF) = TMC_REG_DUMP_VER;
 		dump.id = MSM_TMC0_REG + count;
 		dump.start_addr = virt_to_phys(baddr);
 		dump.end_addr = dump.start_addr + PAGE_SIZE + reg_size;
 		ret = msm_dump_table_register(&dump);
-		if (ret) {
-			devm_kfree(dev, baddr);
+		/*
+		 * Don't free the buffer in case of error since it can still
+		 * be used to dump registers as part of abort to aid post crash
+		 * parsing.
+		 */
+		if (ret)
 			dev_info(dev, "TMC REG dump setup failed\n");
-		}
 	} else {
 		dev_info(dev, "TMC REG dump space allocation failed\n");
 	}
