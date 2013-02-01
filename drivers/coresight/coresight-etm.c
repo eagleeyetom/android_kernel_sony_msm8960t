@@ -261,24 +261,10 @@ struct etm_drvdata {
 	bool				round_robin;
 };
 
-static struct etm_drvdata *etmdrvdata[NR_CPUS];
+static struct etm_drvdata *etm0drvdata;
 
-/*
- * Memory mapped writes to clear os lock are not supported on Krait v1, v2
- * and OS lock must be unlocked before any memory mapped access, otherwise
- * memory mapped reads/writes will be invalid.
- */
-static void etm_os_unlock(void *info)
-{
-	if (cpu_is_krait()) {
-		etm_writel_cp14(0x0, ETMOSLAR);
-		isb();
-	}
-}
-
-/*
- * ETM clock is derived from the processor clock and gets enabled on a
- * logical OR of below items on Krait (v2 onwards):
+/* ETM clock is derived from the processor clock and gets enabled on a
+ * logical OR of below items on Krait (pass2 onwards):
  * 1.CPMR[ETMCLKEN] is 1
  * 2.ETMCR[PD] is 0
  * 3.ETMPDCR[PU] is 1
@@ -1957,6 +1943,16 @@ static void __devinit etm_copy_arch_data(struct etm_drvdata *drvdata)
 	drvdata->data_trace_support = etmdrvdata[0]->data_trace_support;
 }
 
+static void __devinit etm_copy_arch_data(struct etm_drvdata *drvdata)
+{
+	drvdata->arch = etm0drvdata->arch;
+	drvdata->nr_addr_cmp = etm0drvdata->nr_addr_cmp;
+	drvdata->nr_cntr = etm0drvdata->nr_cntr;
+	drvdata->nr_ext_inp = etm0drvdata->nr_ext_inp;
+	drvdata->nr_ext_out = etm0drvdata->nr_ext_out;
+	drvdata->nr_ctxid_cmp = etm0drvdata->nr_ctxid_cmp;
+}
+
 static void __devinit etm_init_default_data(struct etm_drvdata *drvdata)
 {
 	int i;
@@ -2077,31 +2073,19 @@ static int __devinit etm_probe(struct platform_device *pdev)
 	if (ret)
 		goto err0;
 
-	drvdata->cpu = count++;
-
-	get_online_cpus();
-	etmdrvdata[drvdata->cpu] = drvdata;
-
-	if (!smp_call_function_single(drvdata->cpu, etm_os_unlock, NULL, 1))
-		drvdata->os_unlock = true;
-	/*
-	 * Use CPU0 to populate read-only configuration data for ETM0. For
-	 * other ETMs copy it over from ETM0.
+	/* Use CPU0 to populate read-only configuration data for ETM0. For other
+	 * ETMs copy it over from ETM0.
 	 */
 	if (drvdata->cpu == 0) {
-		register_hotcpu_notifier(&etm_cpu_notifier);
-		if (smp_call_function_single(drvdata->cpu, etm_init_arch_data,
-					     drvdata, 1))
-			dev_err(dev, "ETM arch init failed\n");
+		ret = etm_init_arch_data(drvdata);
+		if (ret)
+			goto err1;
+		etm0drvdata = drvdata;
 	} else {
-		etm_copy_arch_data(drvdata);
-	}
-
-	put_online_cpus();
-
-	if (etm_arch_supported(drvdata->arch) == false) {
-		ret = -EINVAL;
-		goto err1;
+		if (etm0drvdata)
+			etm_copy_arch_data(drvdata);
+		else
+			goto err1;
 	}
 	etm_init_default_data(drvdata);
 
