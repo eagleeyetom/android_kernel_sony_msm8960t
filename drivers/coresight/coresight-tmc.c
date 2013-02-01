@@ -1053,9 +1053,38 @@ static int __devinit tmc_probe(struct platform_device *pdev)
 		if (ret)
 			goto err0;
 	} else {
-		drvdata->buf = devm_kzalloc(dev, drvdata->size, GFP_KERNEL);
-		if (!drvdata->buf)
+		baddr = devm_kzalloc(dev, PAGE_SIZE + drvdata->size,
+				     GFP_KERNEL);
+		if (!baddr)
 			return -ENOMEM;
+		drvdata->buf = baddr + PAGE_SIZE;
+		*(uint32_t *)(baddr + TMC_ETFETB_DUMP_VER_OFF) =
+							TMC_ETFETB_DUMP_VER;
+		dump.id = MSM_TMC_ETFETB + etfetb_count;
+		dump.start_addr = virt_to_phys(baddr);
+		dump.end_addr = dump.start_addr + PAGE_SIZE + drvdata->size;
+		ret = msm_dump_table_register(&dump);
+		/* Don't free the buffer in case of error since it can still
+		 * be used to provide dump collection via the device node
+		 */
+		if (ret)
+			dev_info(dev, "TMC ETF-ETB dump setup failed\n");
+		etfetb_count++;
+	}
+
+	baddr = devm_kzalloc(dev, PAGE_SIZE + reg_size, GFP_KERNEL);
+	if (baddr) {
+		*(uint32_t *)(baddr + TMC_REG_DUMP_VER_OFF) = TMC_REG_DUMP_VER;
+		dump.id = MSM_TMC0_REG + count;
+		dump.start_addr = virt_to_phys(baddr);
+		dump.end_addr = dump.start_addr + PAGE_SIZE + reg_size;
+		ret = msm_dump_table_register(&dump);
+		if (ret) {
+			devm_kfree(dev, baddr);
+			dev_info(dev, "TMC REG dump setup failed\n");
+		}
+	} else {
+		dev_info(dev, "TMC REG dump space allocation failed\n");
 	}
 
 	desc = devm_kzalloc(dev, sizeof(*desc), GFP_KERNEL);
