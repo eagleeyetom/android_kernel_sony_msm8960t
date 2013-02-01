@@ -159,7 +159,6 @@ struct etm_drvdata {
 	int				cpu;
 	uint8_t				arch;
 	bool				enable;
-	bool				os_unlock;
 	uint8_t				nr_addr_cmp;
 	uint8_t				nr_cntr;
 	uint8_t				nr_ext_inp;
@@ -377,20 +376,14 @@ static int etm_enable(struct coresight_device *csdev)
 	if (ret)
 		goto err_clk;
 
-	get_online_cpus();
-	spin_lock(&drvdata->spinlock);
-
+	mutex_lock(&drvdata->mutex);
 	/*
 	 * Executing __etm_enable on the cpu whose ETM is being enabled
 	 * ensures that register writes occur when cpu is powered.
 	 */
-	ret = smp_call_function_single(drvdata->cpu, __etm_enable, drvdata, 1);
-	if (ret)
-		goto err;
+	smp_call_function_single(drvdata->cpu, __etm_enable, drvdata, 1);
 	drvdata->enable = true;
-
-	spin_unlock(&drvdata->spinlock);
-	put_online_cpus();
+	mutex_unlock(&drvdata->mutex);
 
 	wake_unlock(&drvdata->wake_lock);
 
@@ -430,18 +423,14 @@ static void etm_disable(struct coresight_device *csdev)
 
 	wake_lock(&drvdata->wake_lock);
 
-	get_online_cpus();
-	spin_lock(&drvdata->spinlock);
-
+	mutex_lock(&drvdata->mutex);
 	/*
 	 * Executing __etm_disable on the cpu whose ETM is being disabled
 	 * ensures that register writes occur when cpu is powered.
 	 */
 	smp_call_function_single(drvdata->cpu, __etm_disable, drvdata, 1);
 	drvdata->enable = false;
-
-	spin_unlock(&drvdata->spinlock);
-	put_online_cpus();
+	mutex_unlock(&drvdata->mutex);
 
 	clk_disable_unprepare(drvdata->clk);
 
