@@ -159,6 +159,7 @@ struct etm_drvdata {
 	int				cpu;
 	uint8_t				arch;
 	bool				enable;
+	bool				os_unlock;
 	uint8_t				nr_addr_cmp;
 	uint8_t				nr_cntr;
 	uint8_t				nr_ext_inp;
@@ -198,6 +199,17 @@ struct etm_drvdata {
 };
 
 static struct etm_drvdata *etmdrvdata[NR_CPUS];
+
+/*
+ * Memory mapped writes to clear os lock are not supported on Krait v1, v2
+ * and OS lock must be unlocked before any memory mapped access, otherwise
+ * memory mapped reads/writes will be invalid.
+ */
+static void etm_os_unlock(void *info)
+{
+	etm_writel_cp14(0x0, ETMOSLAR);
+	isb();
+}
 
 /*
  * Memory mapped writes to clear os lock are not supported on Krait v1, v2
@@ -376,16 +388,20 @@ static int etm_enable(struct coresight_device *csdev)
 	if (ret)
 		goto err_clk;
 
+	get_online_cpus();
 	spin_lock(&drvdata->spinlock);
 
 	/*
 	 * Executing __etm_enable on the cpu whose ETM is being enabled
 	 * ensures that register writes occur when cpu is powered.
 	 */
-	smp_call_function_single(drvdata->cpu, __etm_enable, drvdata, 1);
+	ret = smp_call_function_single(drvdata->cpu, __etm_enable, drvdata, 1);
+	if (ret)
+		goto err;
 	drvdata->enable = true;
 
 	spin_unlock(&drvdata->spinlock);
+	put_online_cpus();
 
 	wake_unlock(&drvdata->wake_lock);
 
@@ -425,6 +441,7 @@ static void etm_disable(struct coresight_device *csdev)
 
 	wake_lock(&drvdata->wake_lock);
 
+	get_online_cpus();
 	spin_lock(&drvdata->spinlock);
 
 	/*
@@ -435,6 +452,7 @@ static void etm_disable(struct coresight_device *csdev)
 	drvdata->enable = false;
 
 	spin_unlock(&drvdata->spinlock);
+	put_online_cpus();
 
 	clk_disable_unprepare(drvdata->clk);
 
@@ -1795,6 +1813,16 @@ static int __devinit etm_probe(struct platform_device *pdev)
 	if (IS_ERR(drvdata->csdev)) {
 		ret = PTR_ERR(drvdata->csdev);
 		goto err2;
+	}
+
+	if (pdev->dev.of_node)
+		drvdata->pcsave_impl = of_property_read_bool(pdev->dev.of_node,
+							     "qcom,pc-save");
+	if (drvdata->pcsave_impl) {
+		ret = device_create_file(&drvdata->csdev->dev,
+					 &dev_attr_pcsave);
+		if (ret)
+			dev_err(dev, "ETM pcsave dev node creation failed\n");
 	}
 
 	dev_info(dev, "ETM initialized\n");
