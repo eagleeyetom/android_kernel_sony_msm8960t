@@ -30,8 +30,6 @@
 #define CORESIGHT_COMPIDR2	(0xFF8)
 #define CORESIGHT_COMPIDR3	(0xFFC)
 
-#define ETM_ARCH_V1_0		(0x00)
-#define ETM_ARCH_V1_2		(0x02)
 #define ETM_ARCH_V3_3		(0x23)
 #define ETM_ARCH_V3_5		(0x25)
 #define PFT_ARCH_MAJOR		(0x30)
