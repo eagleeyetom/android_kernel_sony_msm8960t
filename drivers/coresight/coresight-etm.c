@@ -285,18 +285,24 @@ static void etm_set_pwrup(struct etm_drvdata *drvdata)
 {
 	uint32_t etmpdcr;
 
-	etmpdcr = etm_readl(drvdata, ETMPDCR);
+	etmpdcr = etm_readl_mm(drvdata, ETMPDCR);
 	etmpdcr |= BIT(3);
-	etm_writel(drvdata, etmpdcr, ETMPDCR);
+	etm_writel_mm(drvdata, etmpdcr, ETMPDCR);
+	/* ensure pwrup completes before subsequent cp14 accesses */
+	mb();
+	isb();
 }
 
 static void etm_clr_pwrup(struct etm_drvdata *drvdata)
 {
 	uint32_t etmpdcr;
 
-	etmpdcr = etm_readl(drvdata, ETMPDCR);
+	/* ensure pending cp14 accesses complete before clearing pwrup */
+	mb();
+	isb();
+	etmpdcr = etm_readl_mm(drvdata, ETMPDCR);
 	etmpdcr &= ~BIT(3);
-	etm_writel(drvdata, etmpdcr, ETMPDCR);
+	etm_writel_mm(drvdata, etmpdcr, ETMPDCR);
 }
 
 static void etm_set_prog(struct etm_drvdata *drvdata)
@@ -1783,11 +1789,19 @@ static bool __devinit etm_arch_supported(uint8_t arch)
 	return true;
 }
 
-static void __devinit etm_init_arch_data(struct etm_drvdata *drvdata)
+static void __devinit etm_prepare_arch(struct etm_drvdata *drvdata)
+{
+	/* Unlock OS lock first to allow memory mapped reads and writes. This
+	 * is required for Krait pass1
+	 * */
+	etm_os_unlock(NULL);
+	smp_call_function(etm_os_unlock, NULL, 1);
+}
+
+static void __devinit etm_init_arch_data(void *info)
 {
 	uint32_t etmidr;
 	uint32_t etmccr;
-	uint32_t etmcr;
 	struct etm_drvdata *drvdata = info;
 
 	ETM_UNLOCK(drvdata);
@@ -1963,7 +1977,9 @@ static int __devinit etm_probe(struct platform_device *pdev)
 	 * ETMs copy it over from ETM0.
 	 */
 	if (drvdata->cpu == 0) {
-		etm_init_arch_data(drvdata);
+		etm_prepare_arch(drvdata);
+		smp_call_function_single(drvdata->cpu, etm_init_arch_data,
+					 drvdata, 1);
 		etm0drvdata = drvdata;
 	} else {
 		etm_copy_arch_data(drvdata);
