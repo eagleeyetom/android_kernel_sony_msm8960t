@@ -479,14 +479,16 @@ static int etm_enable(struct coresight_device *csdev)
 	if (ret)
 		goto err_clk;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
+
 	/*
 	 * Executing __etm_enable on the cpu whose ETM is being enabled
 	 * ensures that register writes occur when cpu is powered.
 	 */
 	smp_call_function_single(drvdata->cpu, __etm_enable, drvdata, 1);
 	drvdata->enable = true;
-	mutex_unlock(&drvdata->mutex);
+
+	spin_unlock(&drvdata->spinlock);
 
 	wake_unlock(&drvdata->wake_lock);
 
@@ -525,14 +527,16 @@ static void etm_disable(struct coresight_device *csdev)
 
 	wake_lock(&drvdata->wake_lock);
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
+
 	/*
 	 * Executing __etm_disable on the cpu whose ETM is being disabled
 	 * ensures that register writes occur when cpu is powered.
 	 */
 	smp_call_function_single(drvdata->cpu, __etm_disable, drvdata, 1);
 	drvdata->enable = false;
-	mutex_unlock(&drvdata->mutex);
+
+	spin_unlock(&drvdata->spinlock);
 
 	clk_disable_unprepare(drvdata->clk);
 
@@ -711,17 +715,6 @@ static ssize_t etm_store_mode(struct device *dev, struct device_attribute *attr,
 		drvdata->ctrl |= (BIT(14) | BIT(15));
 	else
 		drvdata->ctrl &= ~(BIT(14) | BIT(15));
-	if (etm_version_gte(drvdata->arch, ETM_ARCH_V1_0)) {
-		if (drvdata->mode & ETM_MODE_DATA_TRACE_VAL)
-			drvdata->ctrl |= BIT(2);
-		else
-			drvdata->ctrl &= ~(BIT(2));
-
-		if (drvdata->mode & ETM_MODE_DATA_TRACE_ADDR)
-			drvdata->ctrl |= (BIT(3));
-		else
-			drvdata->ctrl &= ~(BIT(3));
-	}
 	spin_unlock(&drvdata->spinlock);
 
 	return size;
@@ -877,8 +870,6 @@ static ssize_t etm_store_addr_single(struct device *dev,
 
 	drvdata->addr_val[idx] = val;
 	drvdata->addr_type[idx] = ETM_ADDR_TYPE_SINGLE;
-	if (etm_version_gte(drvdata->arch, ETM_ARCH_V1_2))
-		drvdata->enable_ctrl2 |= (1 << idx);
 	spin_unlock(&drvdata->spinlock);
 	return size;
 }
@@ -1698,8 +1689,8 @@ static int __etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
 	if (ret)
 		return ret;
 
-	mutex_lock(&drvdata->mutex);
 	get_online_cpus();
+	spin_lock(&drvdata->spinlock);
 	if (val) {
 		if (drvdata->pcsave_enable)
 			goto out;
@@ -1724,8 +1715,8 @@ static int __etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
 		dev_info(drvdata->dev, "PC save disabled\n");
 	}
 out:
+	spin_unlock(&drvdata->spinlock);
 	put_online_cpus();
-	mutex_unlock(&drvdata->mutex);
 
 	clk_disable_unprepare(drvdata->clk);
 	return ret;
