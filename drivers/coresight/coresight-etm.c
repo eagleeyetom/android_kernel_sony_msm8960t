@@ -25,7 +25,7 @@
 #include <linux/wakelock.h>
 #include <linux/sysfs.h>
 #include <linux/stat.h>
-#include <linux/mutex.h>
+#include <linux/spinlock.h>
 #include <linux/clk.h>
 #include <linux/cpu.h>
 #include <linux/of_coresight.h>
@@ -154,7 +154,7 @@ struct etm_drvdata {
 	struct device			*dev;
 	struct coresight_device		*csdev;
 	struct clk			*clk;
-	struct mutex			mutex;
+	spinlock_t			spinlock;
 	struct wake_lock		wake_lock;
 	int				cpu;
 	uint8_t				arch;
@@ -365,14 +365,16 @@ static int etm_enable(struct coresight_device *csdev)
 	if (ret)
 		goto err_clk;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
+
 	/*
 	 * Executing __etm_enable on the cpu whose ETM is being enabled
 	 * ensures that register writes occur when cpu is powered.
 	 */
 	smp_call_function_single(drvdata->cpu, __etm_enable, drvdata, 1);
 	drvdata->enable = true;
-	mutex_unlock(&drvdata->mutex);
+
+	spin_unlock(&drvdata->spinlock);
 
 	wake_unlock(&drvdata->wake_lock);
 
@@ -408,14 +410,16 @@ static void etm_disable(struct coresight_device *csdev)
 
 	wake_lock(&drvdata->wake_lock);
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
+
 	/*
 	 * Executing __etm_disable on the cpu whose ETM is being disabled
 	 * ensures that register writes occur when cpu is powered.
 	 */
 	smp_call_function_single(drvdata->cpu, __etm_disable, drvdata, 1);
 	drvdata->enable = false;
-	mutex_unlock(&drvdata->mutex);
+
+	spin_unlock(&drvdata->spinlock);
 
 	clk_disable_unprepare(drvdata->clk);
 
@@ -484,7 +488,7 @@ static ssize_t etm_store_reset(struct device *dev,
 	if (sscanf(buf, "%lx", &val) != 1)
 		return -EINVAL;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	if (val) {
 		drvdata->mode = ETM_MODE_EXCLUDE;
 		drvdata->ctrl = 0x0;
@@ -528,7 +532,7 @@ static ssize_t etm_store_reset(struct device *dev,
 			drvdata->sync_freq = 0x80;
 		drvdata->timestamp_event = 0x406F;
 	}
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(reset, S_IRUGO | S_IWUSR, etm_show_reset, etm_store_reset);
@@ -551,7 +555,7 @@ static ssize_t etm_store_mode(struct device *dev, struct device_attribute *attr,
 	if (sscanf(buf, "%lx", &val) != 1)
 		return -EINVAL;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	drvdata->mode = val & ETM_MODE_ALL;
 
 	if (drvdata->mode & ETM_MODE_EXCLUDE)
@@ -578,7 +582,7 @@ static ssize_t etm_store_mode(struct device *dev, struct device_attribute *attr,
 		drvdata->ctrl |= (BIT(14) | BIT(15));
 	else
 		drvdata->ctrl &= ~(BIT(14) | BIT(15));
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 
 	return size;
 }
@@ -680,12 +684,13 @@ static ssize_t etm_store_addr_idx(struct device *dev,
 	if (val >= drvdata->nr_addr_cmp)
 		return -EINVAL;
 
-	/* Use mutex to ensure index doesn't change while it gets dereferenced
-	 * multiple times within a mutex block elsewhere.
+	/*
+	 * Use spinlock to ensure index doesn't change while it gets
+	 * dereferenced multiple times within a spinlock block elsewhere.
 	 */
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	drvdata->addr_idx = val;
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(addr_idx, S_IRUGO | S_IWUSR, etm_show_addr_idx,
@@ -698,16 +703,16 @@ static ssize_t etm_show_addr_single(struct device *dev,
 	unsigned long val;
 	uint8_t idx;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	idx = drvdata->addr_idx;
 	if (!(drvdata->addr_type[idx] == ETM_ADDR_TYPE_NONE ||
 	      drvdata->addr_type[idx] == ETM_ADDR_TYPE_SINGLE)) {
-		mutex_unlock(&drvdata->mutex);
+		spin_unlock(&drvdata->spinlock);
 		return -EPERM;
 	}
 
 	val = drvdata->addr_val[idx];
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return scnprintf(buf, PAGE_SIZE, "%#lx\n", val);
 }
 
@@ -722,17 +727,17 @@ static ssize_t etm_store_addr_single(struct device *dev,
 	if (sscanf(buf, "%lx", &val) != 1)
 		return -EINVAL;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	idx = drvdata->addr_idx;
 	if (!(drvdata->addr_type[idx] == ETM_ADDR_TYPE_NONE ||
 	      drvdata->addr_type[idx] == ETM_ADDR_TYPE_SINGLE)) {
-		mutex_unlock(&drvdata->mutex);
+		spin_unlock(&drvdata->spinlock);
 		return -EPERM;
 	}
 
 	drvdata->addr_val[idx] = val;
 	drvdata->addr_type[idx] = ETM_ADDR_TYPE_SINGLE;
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(addr_single, S_IRUGO | S_IWUSR, etm_show_addr_single,
@@ -745,23 +750,23 @@ static ssize_t etm_show_addr_range(struct device *dev,
 	unsigned long val1, val2;
 	uint8_t idx;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	idx = drvdata->addr_idx;
 	if (idx % 2 != 0) {
-		mutex_unlock(&drvdata->mutex);
+		spin_unlock(&drvdata->spinlock);
 		return -EPERM;
 	}
 	if (!((drvdata->addr_type[idx] == ETM_ADDR_TYPE_NONE &&
 	       drvdata->addr_type[idx + 1] == ETM_ADDR_TYPE_NONE) ||
 	      (drvdata->addr_type[idx] == ETM_ADDR_TYPE_RANGE &&
 	       drvdata->addr_type[idx + 1] == ETM_ADDR_TYPE_RANGE))) {
-		mutex_unlock(&drvdata->mutex);
+		spin_unlock(&drvdata->spinlock);
 		return -EPERM;
 	}
 
 	val1 = drvdata->addr_val[idx];
 	val2 = drvdata->addr_val[idx + 1];
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return scnprintf(buf, PAGE_SIZE, "%#lx %#lx\n", val1, val2);
 }
 
@@ -779,17 +784,17 @@ static ssize_t etm_store_addr_range(struct device *dev,
 	if (val1 > val2)
 		return -EINVAL;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	idx = drvdata->addr_idx;
 	if (idx % 2 != 0) {
-		mutex_unlock(&drvdata->mutex);
+		spin_unlock(&drvdata->spinlock);
 		return -EPERM;
 	}
 	if (!((drvdata->addr_type[idx] == ETM_ADDR_TYPE_NONE &&
 	       drvdata->addr_type[idx + 1] == ETM_ADDR_TYPE_NONE) ||
 	      (drvdata->addr_type[idx] == ETM_ADDR_TYPE_RANGE &&
 	       drvdata->addr_type[idx + 1] == ETM_ADDR_TYPE_RANGE))) {
-		mutex_unlock(&drvdata->mutex);
+		spin_unlock(&drvdata->spinlock);
 		return -EPERM;
 	}
 
@@ -798,7 +803,7 @@ static ssize_t etm_store_addr_range(struct device *dev,
 	drvdata->addr_val[idx + 1] = val2;
 	drvdata->addr_type[idx + 1] = ETM_ADDR_TYPE_RANGE;
 	drvdata->enable_ctrl1 |= (1 << (idx/2));
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(addr_range, S_IRUGO | S_IWUSR, etm_show_addr_range,
@@ -811,16 +816,16 @@ static ssize_t etm_show_addr_start(struct device *dev,
 	unsigned long val;
 	uint8_t idx;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	idx = drvdata->addr_idx;
 	if (!(drvdata->addr_type[idx] == ETM_ADDR_TYPE_NONE ||
 	      drvdata->addr_type[idx] == ETM_ADDR_TYPE_START)) {
-		mutex_unlock(&drvdata->mutex);
+		spin_unlock(&drvdata->spinlock);
 		return -EPERM;
 	}
 
 	val = drvdata->addr_val[idx];
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return scnprintf(buf, PAGE_SIZE, "%#lx\n", val);
 }
 
@@ -835,11 +840,11 @@ static ssize_t etm_store_addr_start(struct device *dev,
 	if (sscanf(buf, "%lx", &val) != 1)
 		return -EINVAL;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	idx = drvdata->addr_idx;
 	if (!(drvdata->addr_type[idx] == ETM_ADDR_TYPE_NONE ||
 	      drvdata->addr_type[idx] == ETM_ADDR_TYPE_START)) {
-		mutex_unlock(&drvdata->mutex);
+		spin_unlock(&drvdata->spinlock);
 		return -EPERM;
 	}
 
@@ -847,7 +852,7 @@ static ssize_t etm_store_addr_start(struct device *dev,
 	drvdata->addr_type[idx] = ETM_ADDR_TYPE_START;
 	drvdata->startstop_ctrl |= (1 << idx);
 	drvdata->enable_ctrl1 |= BIT(25);
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(addr_start, S_IRUGO | S_IWUSR, etm_show_addr_start,
@@ -860,16 +865,16 @@ static ssize_t etm_show_addr_stop(struct device *dev,
 	unsigned long val;
 	uint8_t idx;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	idx = drvdata->addr_idx;
 	if (!(drvdata->addr_type[idx] == ETM_ADDR_TYPE_NONE ||
 	      drvdata->addr_type[idx] == ETM_ADDR_TYPE_STOP)) {
-		mutex_unlock(&drvdata->mutex);
+		spin_unlock(&drvdata->spinlock);
 		return -EPERM;
 	}
 
 	val = drvdata->addr_val[idx];
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return scnprintf(buf, PAGE_SIZE, "%#lx\n", val);
 }
 
@@ -884,11 +889,11 @@ static ssize_t etm_store_addr_stop(struct device *dev,
 	if (sscanf(buf, "%lx", &val) != 1)
 		return -EINVAL;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	idx = drvdata->addr_idx;
 	if (!(drvdata->addr_type[idx] == ETM_ADDR_TYPE_NONE ||
 	      drvdata->addr_type[idx] == ETM_ADDR_TYPE_STOP)) {
-		mutex_unlock(&drvdata->mutex);
+		spin_unlock(&drvdata->spinlock);
 		return -EPERM;
 	}
 
@@ -896,7 +901,7 @@ static ssize_t etm_store_addr_stop(struct device *dev,
 	drvdata->addr_type[idx] = ETM_ADDR_TYPE_STOP;
 	drvdata->startstop_ctrl |= (1 << (idx + 16));
 	drvdata->enable_ctrl1 |= BIT(25);
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(addr_stop, S_IRUGO | S_IWUSR, etm_show_addr_stop,
@@ -908,9 +913,9 @@ static ssize_t etm_show_addr_acctype(struct device *dev,
 	struct etm_drvdata *drvdata = dev_get_drvdata(dev->parent);
 	unsigned long val;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	val = drvdata->addr_acctype[drvdata->addr_idx];
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return scnprintf(buf, PAGE_SIZE, "%#lx\n", val);
 }
 
@@ -924,9 +929,9 @@ static ssize_t etm_store_addr_acctype(struct device *dev,
 	if (sscanf(buf, "%lx", &val) != 1)
 		return -EINVAL;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	drvdata->addr_acctype[drvdata->addr_idx] = val;
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(addr_acctype, S_IRUGO | S_IWUSR, etm_show_addr_acctype,
@@ -953,12 +958,13 @@ static ssize_t etm_store_cntr_idx(struct device *dev,
 	if (val >= drvdata->nr_cntr)
 		return -EINVAL;
 
-	/* Use mutex to ensure index doesn't change while it gets dereferenced
-	 * multiple times within a mutex block elsewhere.
+	/*
+	 * Use spinlock to ensure index doesn't change while it gets
+	 * dereferenced multiple times within a spinlock block elsewhere.
 	 */
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	drvdata->cntr_idx = val;
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(cntr_idx, S_IRUGO | S_IWUSR, etm_show_cntr_idx,
@@ -970,9 +976,9 @@ static ssize_t etm_show_cntr_rld_val(struct device *dev,
 	struct etm_drvdata *drvdata = dev_get_drvdata(dev->parent);
 	unsigned long val;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	val = drvdata->cntr_rld_val[drvdata->cntr_idx];
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return scnprintf(buf, PAGE_SIZE, "%#lx\n", val);
 }
 
@@ -986,9 +992,9 @@ static ssize_t etm_store_cntr_rld_val(struct device *dev,
 	if (sscanf(buf, "%lx", &val) != 1)
 		return -EINVAL;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	drvdata->cntr_rld_val[drvdata->cntr_idx] = val;
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(cntr_rld_val, S_IRUGO | S_IWUSR, etm_show_cntr_rld_val,
@@ -1000,9 +1006,9 @@ static ssize_t etm_show_cntr_event(struct device *dev,
 	struct etm_drvdata *drvdata = dev_get_drvdata(dev->parent);
 	unsigned long val;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	val = drvdata->cntr_event[drvdata->cntr_idx];
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return scnprintf(buf, PAGE_SIZE, "%#lx\n", val);
 }
 
@@ -1016,9 +1022,9 @@ static ssize_t etm_store_cntr_event(struct device *dev,
 	if (sscanf(buf, "%lx", &val) != 1)
 		return -EINVAL;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	drvdata->cntr_event[drvdata->cntr_idx] = val & ETM_EVENT_MASK;
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(cntr_event, S_IRUGO | S_IWUSR, etm_show_cntr_event,
@@ -1030,9 +1036,9 @@ static ssize_t etm_show_cntr_rld_event(struct device *dev,
 	struct etm_drvdata *drvdata = dev_get_drvdata(dev->parent);
 	unsigned long val;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	val = drvdata->cntr_rld_event[drvdata->cntr_idx];
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return scnprintf(buf, PAGE_SIZE, "%#lx\n", val);
 }
 
@@ -1046,9 +1052,9 @@ static ssize_t etm_store_cntr_rld_event(struct device *dev,
 	if (sscanf(buf, "%lx", &val) != 1)
 		return -EINVAL;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	drvdata->cntr_rld_event[drvdata->cntr_idx] = val & ETM_EVENT_MASK;
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(cntr_rld_event, S_IRUGO | S_IWUSR, etm_show_cntr_rld_event,
@@ -1060,9 +1066,9 @@ static ssize_t etm_show_cntr_val(struct device *dev,
 	struct etm_drvdata *drvdata = dev_get_drvdata(dev->parent);
 	unsigned long val;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	val = drvdata->cntr_val[drvdata->cntr_idx];
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return scnprintf(buf, PAGE_SIZE, "%#lx\n", val);
 }
 
@@ -1076,9 +1082,9 @@ static ssize_t etm_store_cntr_val(struct device *dev,
 	if (sscanf(buf, "%lx", &val) != 1)
 		return -EINVAL;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	drvdata->cntr_val[drvdata->cntr_idx] = val;
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(cntr_val, S_IRUGO | S_IWUSR, etm_show_cntr_val,
@@ -1282,12 +1288,13 @@ static ssize_t etm_store_ctxid_idx(struct device *dev,
 	if (val >= drvdata->nr_ctxid_cmp)
 		return -EINVAL;
 
-	/* Use mutex to ensure index doesn't change while it gets dereferenced
-	 * multiple times within a mutex block elsewhere.
+	/*
+	 * Use spinlock to ensure index doesn't change while it gets
+	 * dereferenced multiple times within a spinlock block elsewhere.
 	 */
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	drvdata->ctxid_idx = val;
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(ctxid_idx, S_IRUGO | S_IWUSR, etm_show_ctxid_idx,
@@ -1299,9 +1306,9 @@ static ssize_t etm_show_ctxid_val(struct device *dev,
 	struct etm_drvdata *drvdata = dev_get_drvdata(dev->parent);
 	unsigned long val;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	val = drvdata->ctxid_val[drvdata->ctxid_idx];
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return scnprintf(buf, PAGE_SIZE, "%#lx\n", val);
 }
 
@@ -1315,9 +1322,9 @@ static ssize_t etm_store_ctxid_val(struct device *dev,
 	if (sscanf(buf, "%lx", &val) != 1)
 		return -EINVAL;
 
-	mutex_lock(&drvdata->mutex);
+	spin_lock(&drvdata->spinlock);
 	drvdata->ctxid_val[drvdata->ctxid_idx] = val;
-	mutex_unlock(&drvdata->mutex);
+	spin_unlock(&drvdata->spinlock);
 	return size;
 }
 static DEVICE_ATTR(ctxid_val, S_IRUGO | S_IWUSR, etm_show_ctxid_val,
@@ -1416,8 +1423,8 @@ static int __etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
 	if (ret)
 		return ret;
 
-	mutex_lock(&drvdata->mutex);
 	get_online_cpus();
+	spin_lock(&drvdata->spinlock);
 	if (val) {
 		if (drvdata->pcsave_enable)
 			goto out;
@@ -1442,8 +1449,8 @@ static int __etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
 		dev_info(drvdata->dev, "PC save disabled\n");
 	}
 out:
+	spin_unlock(&drvdata->spinlock);
 	put_online_cpus();
-	mutex_unlock(&drvdata->mutex);
 
 	clk_disable_unprepare(drvdata->clk);
 	return ret;
@@ -1668,7 +1675,7 @@ static int __devinit etm_probe(struct platform_device *pdev)
 	if (!drvdata->base)
 		return -ENOMEM;
 
-	mutex_init(&drvdata->mutex);
+	spin_lock_init(&drvdata->spinlock);
 	wake_lock_init(&drvdata->wake_lock, WAKE_LOCK_SUSPEND, "coresight-etm");
 
 	drvdata->clk = devm_clk_get(dev, "core_clk");
@@ -1733,7 +1740,6 @@ err1:
 	clk_disable_unprepare(drvdata->clk);
 err0:
 	wake_lock_destroy(&drvdata->wake_lock);
-	mutex_destroy(&drvdata->mutex);
 	return ret;
 }
 
@@ -1743,7 +1749,6 @@ static int __devexit etm_remove(struct platform_device *pdev)
 
 	coresight_unregister(drvdata->csdev);
 	wake_lock_destroy(&drvdata->wake_lock);
-	mutex_destroy(&drvdata->mutex);
 	return 0;
 }
 
