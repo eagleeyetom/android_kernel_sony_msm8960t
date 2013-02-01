@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -173,9 +173,6 @@ do {									\
 #define ETM_REG_DUMP_VER_OFF		(4)
 #define ETM_REG_DUMP_VER		(1)
 
-#define ETM_REG_DUMP_VER_OFF	(4)
-#define ETM_REG_DUMP_VER	(1)
-
 enum etm_addr_type {
 	ETM_ADDR_TYPE_NONE,
 	ETM_ADDR_TYPE_SINGLE,
@@ -270,8 +267,10 @@ static struct etm_drvdata *etmdrvdata[NR_CPUS];
  */
 static void etm_os_unlock(void *info)
 {
-	etm_writel_cp14(0x0, ETMOSLAR);
-	isb();
+	if (cpu_is_krait()) {
+		etm_writel_cp14(0x0, ETMOSLAR);
+		isb();
+	}
 }
 
 /*
@@ -403,6 +402,14 @@ static void etm_disable_pcsave(void *info)
 		etm_set_pwrdwn(drvdata);
 
 	ETM_LOCK(drvdata);
+}
+
+static bool etm_version_gte(uint8_t arch, uint8_t base_arch)
+{
+	if (arch >= base_arch && ((arch & PFT_ARCH_MAJOR) != PFT_ARCH_MAJOR))
+		return true;
+	else
+		return false;
 }
 
 static void __etm_enable(void *info)
@@ -734,6 +741,17 @@ static ssize_t etm_store_mode(struct device *dev, struct device_attribute *attr,
 		drvdata->ctrl |= (BIT(14) | BIT(15));
 	else
 		drvdata->ctrl &= ~(BIT(14) | BIT(15));
+	if (etm_version_gte(drvdata->arch, ETM_ARCH_V1_0)) {
+		if (drvdata->mode & ETM_MODE_DATA_TRACE_VAL)
+			drvdata->ctrl |= BIT(2);
+		else
+			drvdata->ctrl &= ~(BIT(2));
+
+		if (drvdata->mode & ETM_MODE_DATA_TRACE_ADDR)
+			drvdata->ctrl |= (BIT(3));
+		else
+			drvdata->ctrl &= ~(BIT(3));
+	}
 	spin_unlock(&drvdata->spinlock);
 
 	return size;
@@ -889,6 +907,8 @@ static ssize_t etm_store_addr_single(struct device *dev,
 
 	drvdata->addr_val[idx] = val;
 	drvdata->addr_type[idx] = ETM_ADDR_TYPE_SINGLE;
+	if (etm_version_gte(drvdata->arch, ETM_ARCH_V1_2))
+		drvdata->enable_ctrl2 |= (1 << idx);
 	spin_unlock(&drvdata->spinlock);
 	return size;
 }
@@ -1877,6 +1897,7 @@ static void __devinit etm_init_arch_data(void *info)
 {
 	uint32_t etmidr;
 	uint32_t etmccr;
+	uint32_t etmcr;
 	struct etm_drvdata *drvdata = info;
 
 	ETM_UNLOCK(drvdata);
@@ -1933,6 +1954,8 @@ static void __devinit etm_copy_arch_data(struct etm_drvdata *drvdata)
 	drvdata->nr_ext_inp = etmdrvdata[0]->nr_ext_inp;
 	drvdata->nr_ext_out = etmdrvdata[0]->nr_ext_out;
 	drvdata->nr_ctxid_cmp = etmdrvdata[0]->nr_ctxid_cmp;
+	drvdata->nr_data_cmp = etmdrvdata[0]->nr_data_cmp;
+	drvdata->data_trace_support = etmdrvdata[0]->data_trace_support;
 }
 
 static void __devinit etm_init_default_data(struct etm_drvdata *drvdata)
