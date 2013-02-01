@@ -2459,8 +2459,6 @@ static int adreno_waittimestamp(struct kgsl_device *device,
 		else
 			wait = (msecs - time_elapsed);
 
-		retries++;
-
 	} while (!msecs || time_elapsed < msecs);
 
 hang_dump:
