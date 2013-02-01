@@ -173,6 +173,9 @@ do {									\
 #define ETM_REG_DUMP_VER_OFF		(4)
 #define ETM_REG_DUMP_VER		(1)
 
+#define ETM_REG_DUMP_VER_OFF	(4)
+#define ETM_REG_DUMP_VER	(1)
+
 enum etm_addr_type {
 	ETM_ADDR_TYPE_NONE,
 	ETM_ADDR_TYPE_SINGLE,
@@ -2012,6 +2015,8 @@ static int __devinit etm_probe(struct platform_device *pdev)
 	if (ret)
 		goto err0;
 
+	drvdata->cpu = count++;
+
 	ret = clk_prepare_enable(drvdata->clk);
 	if (ret)
 		goto err0;
@@ -2034,10 +2039,6 @@ static int __devinit etm_probe(struct platform_device *pdev)
 
 	clk_disable_unprepare(drvdata->clk);
 
-	if (pdev->dev.of_node)
-		drvdata->round_robin = of_property_read_bool(pdev->dev.of_node,
-							"qcom,round-robin");
-
 	baddr = devm_kzalloc(dev, PAGE_SIZE + reg_size, GFP_KERNEL);
 	if (baddr) {
 		*(uint32_t *)(baddr + ETM_REG_DUMP_VER_OFF) = ETM_REG_DUMP_VER;
@@ -2047,7 +2048,7 @@ static int __devinit etm_probe(struct platform_device *pdev)
 		ret = msm_dump_table_register(&dump);
 		if (ret) {
 			devm_kfree(dev, baddr);
-			dev_err(dev, "ETM REG dump setup failed/unsupported\n");
+			dev_err(dev, "ETM REG dump setup failed\n");
 		}
 	} else {
 		dev_err(dev, "ETM REG dump space allocation failed\n");
