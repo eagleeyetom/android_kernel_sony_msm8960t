@@ -257,6 +257,8 @@ struct etm_drvdata {
 	uint32_t			timestamp_event;
 	bool				pcsave_impl;
 	bool				pcsave_enable;
+	bool				pcsave_sticky_enable;
+	bool				pcsave_boot_enable;
 };
 
 static struct etm_drvdata *etmdrvdata[NR_CPUS];
@@ -1698,7 +1700,7 @@ static ssize_t etm_show_pcsave(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%#lx\n", val);
 }
 
-static int __etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
+static int ____etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
 {
 	int ret = 0;
 
@@ -1706,7 +1708,6 @@ static int __etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
 	if (ret)
 		return ret;
 
-	get_online_cpus();
 	spin_lock(&drvdata->spinlock);
 	if (val) {
 		if (drvdata->pcsave_enable)
@@ -1717,6 +1718,7 @@ static int __etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
 		if (ret)
 			goto out;
 		drvdata->pcsave_enable = true;
+		drvdata->pcsave_sticky_enable = true;
 
 		dev_info(drvdata->dev, "PC save enabled\n");
 	} else {
@@ -1733,9 +1735,19 @@ static int __etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
 	}
 out:
 	spin_unlock(&drvdata->spinlock);
-	put_online_cpus();
 
 	clk_disable_unprepare(drvdata->clk);
+	return ret;
+}
+
+static int __etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
+{
+	int ret;
+
+	get_online_cpus();
+	ret = ____etm_store_pcsave(drvdata, val);
+	put_online_cpus();
+
 	return ret;
 }
 
@@ -1823,6 +1835,13 @@ static int etm_cpu_callback(struct notifier_block *nfb, unsigned long action,
 			spin_lock(&etmdrvdata[cpu]->spinlock);
 			__etm_enable(etmdrvdata[cpu]);
 			spin_unlock(&etmdrvdata[cpu]->spinlock);
+		}
+		break;
+
+	case CPU_ONLINE:
+		if (etmdrvdata[cpu] && etmdrvdata[cpu]->pcsave_boot_enable &&
+		    !etmdrvdata[cpu]->pcsave_sticky_enable) {
+			____etm_store_pcsave(etmdrvdata[cpu], 1);
 		}
 		break;
 
@@ -2121,8 +2140,10 @@ static int __devinit etm_probe(struct platform_device *pdev)
 		drvdata->pcsave_boot_enable = true;
 	}
 
-	if (drvdata->pcsave_impl && boot_pcsave_enable)
-		__etm_store_pcsave(drvdata, true);
+	if (drvdata->pcsave_impl && boot_pcsave_enable) {
+		__etm_store_pcsave(drvdata, 1);
+		drvdata->pcsave_boot_enable = true;
+	}
 
 	return 0;
 err2:
