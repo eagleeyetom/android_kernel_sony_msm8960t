@@ -250,7 +250,7 @@ static void __tmc_etr_enable_to_bam(struct tmc_drvdata *drvdata)
 
 	tmc_writel(drvdata, bamdata->data_fifo.phys_base, TMC_DBALO);
 	tmc_writel(drvdata, 0x0, TMC_DBAHI);
-	tmc_writel(drvdata, 0x133, TMC_FFCR);
+	tmc_writel(drvdata, 0x103, TMC_FFCR);
 	tmc_writel(drvdata, drvdata->trigger_cntr, TMC_TRG);
 	__tmc_enable(drvdata);
 
@@ -310,14 +310,18 @@ static void __tmc_etr_disable_to_bam(struct tmc_drvdata *drvdata)
 	if (!drvdata->enable_to_bam)
 		return;
 
+	/* Ensure periodic flush is disabled in CSR block */
+	msm_qdss_csr_disable_flush();
+
 	TMC_UNLOCK(drvdata);
 
+	tmc_wait_for_flush(drvdata);
 	tmc_flush_and_stop(drvdata);
 	__tmc_disable(drvdata);
 
 	TMC_LOCK(drvdata);
 
-	/* Disable CSR registers */
+	/* Disable CSR configuration */
 	msm_qdss_csr_disable_bam_to_usb();
 	drvdata->enable_to_bam = false;
 }
