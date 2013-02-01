@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -281,52 +281,22 @@ static struct etm_drvdata *etm0drvdata;
  * for ETM clock vote in the driver and the save-restore code uses 1. above
  * for its vote
  */
-static void etm_set_pwrdwn(struct etm_drvdata *drvdata)
-{
-	uint32_t etmcr;
-
-	/* ensure pending cp14 accesses complete before setting pwrdwn */
-	mb();
-	isb();
-	etmcr = etm_readl(drvdata, ETMCR);
-	etmcr |= BIT(0);
-	etm_writel(drvdata, etmcr, ETMCR);
-}
-
-static void etm_clr_pwrdwn(struct etm_drvdata *drvdata)
-{
-	uint32_t etmcr;
-
-	etmcr = etm_readl(drvdata, ETMCR);
-	etmcr &= ~BIT(0);
-	etm_writel(drvdata, etmcr, ETMCR);
-	/* ensure pwrup completes before subsequent cp14 accesses */
-	mb();
-	isb();
-}
-
 static void etm_set_pwrup(struct etm_drvdata *drvdata)
 {
 	uint32_t etmpdcr;
 
-	etmpdcr = etm_readl_mm(drvdata, ETMPDCR);
+	etmpdcr = etm_readl(drvdata, ETMPDCR);
 	etmpdcr |= BIT(3);
-	etm_writel_mm(drvdata, etmpdcr, ETMPDCR);
-	/* ensure pwrup completes before subsequent cp14 accesses */
-	mb();
-	isb();
+	etm_writel(drvdata, etmpdcr, ETMPDCR);
 }
 
 static void etm_clr_pwrup(struct etm_drvdata *drvdata)
 {
 	uint32_t etmpdcr;
 
-	/* ensure pending cp14 accesses complete before clearing pwrup */
-	mb();
-	isb();
-	etmpdcr = etm_readl_mm(drvdata, ETMPDCR);
+	etmpdcr = etm_readl(drvdata, ETMPDCR);
 	etmpdcr &= ~BIT(3);
-	etm_writel_mm(drvdata, etmpdcr, ETMPDCR);
+	etm_writel(drvdata, etmpdcr, ETMPDCR);
 }
 
 static void etm_set_prog(struct etm_drvdata *drvdata)
@@ -373,19 +343,8 @@ static void __etm_enable(void *info)
 	struct etm_drvdata *drvdata = info;
 
 	ETM_UNLOCK(drvdata);
-	/*
-	 * Vote for ETM power/clock enable. ETMPDCR is only accessible via
-	 * memory mapped interface and so use it first to enable power/clock
-	 * to allow subsequent cp14 accesses.
-	 */
+	/* Vote for ETM power/clock enable */
 	etm_set_pwrup(drvdata);
-	/*
-	 * Clear power down bit since when this bit is set writes to
-	 * certain registers might be ignored. This is also a pre-requisite
-	 * for trace enable.
-	 */
-	etm_clr_pwrdwn(drvdata);
-	etm_clr_pwrup(drvdata);
 	etm_set_prog(drvdata);
 
 	etmcr = etm_readl(drvdata, ETMCR);
@@ -483,8 +442,8 @@ static void __etm_disable(void *info)
 	/* program trace enable to low by using always false event */
 	etm_writel(drvdata, 0x6F | BIT(14), ETMTEEVR);
 
-	if (!drvdata->pcsave_enable)
-		etm_set_pwrdwn(drvdata);
+	/* Vote for ETM power/clock disable */
+	etm_clr_pwrup(drvdata);
 	ETM_LOCK(drvdata);
 
 	dev_dbg(drvdata->dev, "cpu: %d disable smp call done\n", drvdata->cpu);
@@ -1832,18 +1791,8 @@ static void __devinit etm_init_arch_data(struct etm_drvdata *drvdata)
 	struct etm_drvdata *drvdata = info;
 
 	ETM_UNLOCK(drvdata);
-	/*
-	 * Vote for ETM power/clock enable. ETMPDCR is only accessible via
-	 * memory mapped interface and so use it first to enable power/clock
-	 * to allow subsequent cp14 accesses.
-	 */
+	/* Vote for ETM power/clock enable */
 	etm_set_pwrup(drvdata);
-	/*
-	 * Clear power down bit since when this bit is set writes to
-	 * certain registers might be ignored.
-	 */
-	etm_clr_pwrdwn(drvdata);
-	etm_clr_pwrup(drvdata);
 	/* Set prog bit. It will be set from reset but this is included to
 	 * ensure it is set
 	 */
@@ -1873,7 +1822,8 @@ static void __devinit etm_init_arch_data(struct etm_drvdata *drvdata)
 	} else
 		drvdata->data_trace_support = false;
 
-	etm_set_pwrdwn(drvdata);
+	/* Vote for ETM power/clock disable */
+	etm_clr_pwrup(drvdata);
 	ETM_LOCK(drvdata);
 }
 
