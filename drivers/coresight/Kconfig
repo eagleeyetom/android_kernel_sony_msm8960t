@@ -24,15 +24,8 @@ if CORESIGHT
 config HAVE_CORESIGHT_SINK
 	bool
 
-config CORESIGHT_CSR
-	bool "CoreSight Slave Register driver"
-	help
-	  This driver provides support for CoreSight Slave Register block
-	  that hosts miscellaneous configuration registers.
-
 config CORESIGHT_TMC
 	bool "CoreSight Trace Memory Controller driver"
-	select CORESIGHT_CSR
 	select HAVE_CORESIGHT_SINK
 	help
 	  This driver provides support for Trace Memory Controller which
@@ -114,22 +107,6 @@ config CORESIGHT_ETM_DEFAULT_ENABLE
 	  If unsure, say 'N' here to avoid potential power and performance
 	  penalty.
 
-config CORESIGHT_ETM_PCSAVE_DEFAULT_ENABLE
-	bool "Turn on PC saving by default"
-	depends on CORESIGHT_ETM
-	help
-	  Turns on program counter saving on reset by default. Otherwise,
-	  PC saving is disabled by default but can be enabled via sysfs.
-
-	  If unsure, say 'N' here to avoid potential power penalty.
-
 endif
-
-config CORESIGHT_EVENT
-	tristate "CoreSight Event driver"
-	help
-	  This driver provides support for registering with various events
-	  and performing CoreSight actions like aborting trace on their
-	  occurrence.
 
 endif
