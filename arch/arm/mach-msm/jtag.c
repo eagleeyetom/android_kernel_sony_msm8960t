@@ -30,12 +30,6 @@
 #define ARM_DEBUG_ARCH_V7	(0x4)
 #define ARM_DEBUG_ARCH_V7p1	(0x5)
 
-/* DBGv7 with baseline CP14 registers implemented */
-#define ARM_DEBUG_ARCH_V7B	(0x3)
-/* DBGv7 with all CP14 registers implemented */
-#define ARM_DEBUG_ARCH_V7	(0x4)
-#define ARM_DEBUG_ARCH_V7p1	(0x5)
-
 #define BM(lsb, msb)		((BIT(msb) - BIT(lsb)) + BIT(msb))
 #define BMVAL(val, lsb, msb)	((val & BM(lsb, msb)) >> lsb)
 #define BVAL(val, n)		((val & BIT(n)) >> n)
