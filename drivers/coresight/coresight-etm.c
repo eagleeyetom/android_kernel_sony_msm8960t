@@ -1434,8 +1434,8 @@ static int __etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
 	if (ret)
 		return ret;
 
+	mutex_lock(&drvdata->mutex);
 	get_online_cpus();
-	spin_lock(&drvdata->spinlock);
 	if (val) {
 		if (drvdata->pcsave_enable)
 			goto out;
@@ -1460,8 +1460,8 @@ static int __etm_store_pcsave(struct etm_drvdata *drvdata, unsigned long val)
 		dev_info(drvdata->dev, "PC save disabled\n");
 	}
 out:
-	spin_unlock(&drvdata->spinlock);
 	put_online_cpus();
+	mutex_unlock(&drvdata->mutex);
 
 	clk_disable_unprepare(drvdata->clk);
 	return ret;
