@@ -851,6 +851,41 @@ static int mpq_tspp_dmx_get_stc(struct dmx_demux *demux, unsigned int num,
 	return 0;
 }
 
+
+/**
+ * Reads TSIF STC from TSPP
+ *
+ * @demux: demux device
+ * @num: STC number. 0 for TSIF0 and 1 for TSIF1.
+ * @stc: STC value
+ * @base: divisor to get 90KHz value
+ *
+ * Return     error code
+ */
+static int mpq_tspp_dmx_get_stc(struct dmx_demux *demux, unsigned int num,
+		u64 *stc, unsigned int *base)
+{
+	enum tspp_source source;
+	u32 tcr_counter;
+
+	if (!demux || !stc || !base)
+		return -EINVAL;
+
+	if (num == 0)
+		source = TSPP_SOURCE_TSIF0;
+	else if (num == 1)
+		source = TSPP_SOURCE_TSIF1;
+	else
+		return -EINVAL;
+
+	tspp_get_ref_clk_counter(0, source, &tcr_counter);
+
+	*stc = ((u64)tcr_counter) * 256; /* conversion to 27MHz */
+	*base = 300; /* divisor to get 90KHz clock from stc value */
+
+	return 0;
+}
+
 static int mpq_tspp_dmx_init(
 			struct dvb_adapter *mpq_adapter,
 			struct mpq_demux *mpq_demux)
