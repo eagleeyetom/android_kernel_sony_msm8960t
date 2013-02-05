@@ -1943,29 +1943,48 @@ int mpq_dmx_decoder_fullness_init(struct dvb_demux_feed *feed)
 
 	return 0;
 
-failed_free_buf:
-	ion_free(mpq_demux->ion_client, mpq_feed->sdmx_buf_handle);
-	mpq_feed->sdmx_buf_handle = NULL;
-end:
-	return ret;
-}
-
-static int mpq_sdmx_free_data_buf(struct mpq_feed *mpq_feed)
+/**
+ * Returns whether the free space of decoder's output
+ * buffer is larger than specific number of bytes.
+ *
+ * @sbuff: MPQ stream buffer used for decoder data.
+ * @required_space: number of required free bytes in the buffer
+ *
+ * Return 1 if required free bytes are available, 0 otherwise.
+ */
+static inline int mpq_dmx_check_decoder_fullness(
+	struct mpq_streambuffer *sbuff,
+	size_t required_space)
 {
 	u32 free = mpq_streambuffer_data_free(sbuff);
 
 	return 0;
 }
 
-static int mpq_sdmx_init_metadata_buffer(struct mpq_demux *mpq_demux,
-	struct mpq_feed *feed, struct sdmx_buff_descr *metadata_buff_desc)
+/**
+ * Checks whether decoder's output buffer has free space
+ * for specific number of bytes, if not, the function waits
+ * until the amount of free-space is available.
+ *
+ * @feed: decoder's feed object
+ * @required_space: number of required free bytes in the buffer
+ * @lock_feed: indicates whether mutex should be held before
+ * accessing the feed information. If the caller of this function
+ * already holds a mutex then this should be set to 0 and 1 otherwise.
+ *
+ * Return 0 if required space is available and error code
+ * in case waiting on buffer fullness was aborted.
+ */
+static int mpq_dmx_decoder_fullness_check(
+		struct dvb_demux_feed *feed,
+		size_t required_space,
+		int lock_feed)
 {
 	struct mpq_demux *mpq_demux = feed->demux->priv;
 	struct mpq_streambuffer *sbuff = NULL;
 	struct mpq_video_feed_info *feed_data;
 	struct mpq_feed *mpq_feed;
 	int ret = 0;
-	int was_locked;
 
 	feed->metadata_buf_handle = ion_alloc(mpq_demux->ion_client,
 		SDMX_METADATA_BUFFER_SIZE,
@@ -1982,11 +2001,13 @@ static int mpq_sdmx_init_metadata_buffer(struct mpq_demux *mpq_demux,
 		goto end;
 	}
 
-	if (mutex_is_locked(&mpq_demux->mutex)) {
-		was_locked = 1;
-	} else {
+	if (lock_feed) {
 		mutex_lock(&mpq_demux->mutex);
-		was_locked = 0;
+	} else if (!mutex_is_locked(&mpq_demux->mutex)) {
+		MPQ_DVB_ERR_PRINT(
+				"%s: Mutex should have been locked\n",
+				__func__);
+		return -EINVAL;
 	}
 
 	mpq_feed = feed->priv;
@@ -1994,7 +2015,7 @@ static int mpq_sdmx_init_metadata_buffer(struct mpq_demux *mpq_demux,
 
 	sbuff = feed_data->video_buffer;
 	if (sbuff == NULL) {
-		if (!was_locked)
+		if (lock_feed)
 			mutex_unlock(&mpq_demux->mutex);
 		MPQ_DVB_ERR_PRINT("%s: mpq_streambuffer object is NULL\n",
 			__func__);
@@ -2029,21 +2050,28 @@ static int mpq_sdmx_init_metadata_buffer(struct mpq_demux *mpq_demux,
 	}
 
 	if (ret < 0) {
-		if (!was_locked)
+		if (lock_feed)
 			mutex_unlock(&mpq_demux->mutex);
 		return ret;
 	}
 
 	if ((feed_data->fullness_wait_cancel) ||
 		(feed_data->video_buffer == NULL)) {
-		if (!was_locked)
+		if (lock_feed)
 			mutex_unlock(&mpq_demux->mutex);
 		return -EINVAL;
 	}
 
-	if (!was_locked)
+	if (lock_feed)
 		mutex_unlock(&mpq_demux->mutex);
 	return 0;
+}
+
+int mpq_dmx_decoder_fullness_wait(
+		struct dvb_demux_feed *feed,
+		size_t required_space)
+{
+	return mpq_dmx_decoder_fullness_check(feed, required_space, 1);
 }
 EXPORT_SYMBOL(mpq_dmx_decoder_fullness_wait);
 
@@ -3520,6 +3548,13 @@ static int mpq_sdmx_section_filtering(struct mpq_feed *mpq_feed,
 	u8 tmp;
 	int i;
 
+	if (!mutex_is_locked(&mpq_feed->mpq_demux->mutex)) {
+		MPQ_DVB_ERR_PRINT(
+				"%s: Mutex should have been locked\n",
+				__func__);
+		return -EINVAL;
+	}
+
 	for (i = 0; i < DVB_DEMUX_MASK_MAX; i++) {
 		tmp = DVB_RINGBUFFER_PEEK(&mpq_feed->sdmx_buf, i);
 		xor = f->filter.filter_value[i] ^ tmp;
@@ -3534,20 +3569,12 @@ static int mpq_sdmx_section_filtering(struct mpq_feed *mpq_feed,
 		return 0;
 
 	if (feed->demux->playback_mode == DMX_PB_MODE_PULL) {
-		int was_locked;
-
-		if (mutex_is_locked(&mpq_feed->mpq_demux->mutex)) {
-			mutex_unlock(&mpq_feed->mpq_demux->mutex);
-			was_locked = 1;
-		} else {
-			was_locked = 0;
-		}
+		mutex_unlock(&mpq_feed->mpq_demux->mutex);
 
 		ret = feed->demux->buffer_ctrl.sec(&f->filter,
 					header->payload_length);
 
-		if (was_locked)
-			mutex_lock(&mpq_feed->mpq_demux->mutex);
+		mutex_lock(&mpq_feed->mpq_demux->mutex);
 
 		if (ret) {
 			MPQ_DVB_DBG_PRINT(
@@ -3582,7 +3609,13 @@ static int mpq_sdmx_check_ts_stall(struct mpq_demux *mpq_demux,
 {
 	struct dvb_demux_feed *feed = mpq_feed->dvb_demux_feed;
 	int ret;
-	int was_locked;
+
+	if (!mutex_is_locked(&mpq_feed->mpq_demux->mutex)) {
+		MPQ_DVB_ERR_PRINT(
+				"%s: Mutex should have been locked\n",
+				__func__);
+		return -EINVAL;
+	}
 
 	/*
 	 * For PULL mode need to verify there is enough space for the dmxdev
@@ -3594,19 +3627,13 @@ static int mpq_sdmx_check_ts_stall(struct mpq_demux *mpq_demux,
 		MPQ_DVB_DBG_PRINT("%s: Stalling for events and %d bytes\n",
 			__func__, req);
 
-		if (mutex_is_locked(&mpq_demux->mutex)) {
-			mutex_unlock(&mpq_demux->mutex);
-			was_locked = 1;
-		} else {
-			was_locked = 0;
-		}
+		mutex_unlock(&mpq_demux->mutex);
 
 		ret = mpq_demux->demux.buffer_ctrl.ts(&feed->feed.ts, req);
 		MPQ_DVB_DBG_PRINT("%s: stall result = %d\n",
 			__func__, ret);
 
-		if (was_locked)
-			mutex_lock(&mpq_demux->mutex);
+		mutex_lock(&mpq_demux->mutex);
 
 		return ret;
 	}
@@ -3796,12 +3823,12 @@ static void mpq_sdmx_decoder_filter_results(struct mpq_demux *mpq_demux,
 		(sts->error_indicators & SDMX_FILTER_ERR_D_LIN_BUFS_FULL)) {
 		MPQ_DVB_DBG_PRINT("%s: Decoder stall...\n", __func__);
 
-		ret = mpq_dmx_decoder_fullness_wait(
-			mpq_feed->dvb_demux_feed, 0);
+		ret = mpq_dmx_decoder_fullness_check(
+			mpq_feed->dvb_demux_feed, 0, 0);
 		if (ret) {
 			/* we reach here if demuxing was aborted */
 			MPQ_DVB_DBG_PRINT(
-				"%s: mpq_dmx_decoder_fullness_wait aborted\n",
+				"%s: mpq_dmx_decoder_fullness_check aborted\n",
 				__func__);
 			return;
 		}
