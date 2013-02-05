@@ -87,9 +87,6 @@
 #include "smd_private.h"
 #include "sysmon.h"
 
-#define MHL_GPIO_INT           30
-#define MHL_GPIO_RESET         35
-
 #define MSM_PMEM_ADSP_SIZE         0x7800000
 #define MSM_PMEM_AUDIO_SIZE        0x4CF000
 #ifdef CONFIG_FB_MSM_HDMI_AS_PRIMARY
@@ -1951,25 +1948,6 @@ static struct mdm_platform_data mdm_platform_data = {
 	.mdm2ap_status_gpio_run_cfg = &mdm2ap_status_gpio_run_cfg,
 	.sysmon_subsys_id_valid = 1,
 	.sysmon_subsys_id = SYSMON_SS_EXT_MODEM,
-};
-
-static struct mdm_vddmin_resource bmdm_vddmin_rscs = {
-	.rpm_id = MSM_RPM_ID_VDDMIN_GPIO,
-	.ap2mdm_vddmin_gpio = 30,
-	.modes  = 0x03,
-	.drive_strength = 8,
-	.mdm2ap_vddmin_gpio = 64,
-};
-
-static struct mdm_platform_data bmdm_platform_data = {
-	.mdm_version = "3.0",
-	.ramdump_delay_ms = 2000,
-	.sfr_query = 1,
-	.send_shdn = 1,
-	.vddmin_resource = &bmdm_vddmin_rscs,
-	.peripheral_platform_device = &apq8064_device_ehci_host3,
-	.ramdump_timeout_ms = 120000,
-	.mdm2ap_status_gpio_run_cfg = &mdm2ap_status_gpio_run_cfg,
 };
 
 static struct tsens_platform_data apq_tsens_pdata  = {
