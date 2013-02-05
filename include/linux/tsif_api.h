@@ -214,6 +214,17 @@ void tsif_stop(void *cookie);
 int tsif_get_ref_clk_counter(void *cookie, u32 *tcr_counter);
 
 /**
+ * tsif_get_ref_clk_counter - return the TSIF clock reference (TCR) counter.
+ * @cookie:      TSIF cookie previously obtained with tsif_attach()
+ * @tcr_counter: the value of TCR counter
+ *
+ * Return      error code
+ *
+ * TCR increments at a rate equal to 27 MHz/256 = 105.47 kHz.
+ */
+int tsif_get_ref_clk_counter(void *cookie, u32 *tcr_counter);
+
+/**
  * tsif_reclaim_packets - inform that buffer space may be reclaimed
  * @cookie:    TSIF cookie previously obtained with tsif_attach()
  * @ri:        new value for read index
