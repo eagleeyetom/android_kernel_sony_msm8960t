@@ -19,8 +19,6 @@
 #include "mpq_dmx_plugin_common.h"
 
 
-#define TSIF_COUNT					2
-
 /* Max number of PID filters */
 #define TSPP_MAX_PID_FILTER_NUM		128
 
@@ -203,6 +201,41 @@ static struct
 static int mpq_tspp_allocate_hw_filter_index(int tsif)
 {
 	int i;
+
+	for (i = 0; i < TSPP_MAX_HW_PID_FILTER_NUM; i++) {
+		if (mpq_dmx_tspp_info.tsif[tsif].hw_indexes[i] == 0) {
+			mpq_dmx_tspp_info.tsif[tsif].hw_indexes[i] = 1;
+			return i;
+		}
+	}
+
+	return -ENOMEM;
+}
+
+/**
+ * Releases a HW filter index for future reuse.
+ *
+ * @tsif: The TSIF from which the filter should be released
+ * @hw_index: The HW index to release
+ *
+ */
+static inline void mpq_tspp_release_hw_filter_index(int tsif, int hw_index)
+{
+	if ((hw_index >= 0) && (hw_index < TSPP_MAX_HW_PID_FILTER_NUM))
+		mpq_dmx_tspp_info.tsif[tsif].hw_indexes[hw_index] = 0;
+}
+
+
+/**
+ * Returns a free HW filter index that can be used.
+ *
+ * @tsif: The TSIF to allocate filter from
+ *
+ * Return  HW filter index or -ENOMEM if no filters available
+ */
+static int mpq_tspp_allocate_hw_filter_index(int tsif)
+{
+	int slot;
 
 	for (i = 0; i < TSPP_MAX_HW_PID_FILTER_NUM; i++) {
 		if (mpq_dmx_tspp_info.tsif[tsif].hw_indexes[i] == 0) {
@@ -437,6 +470,295 @@ static void mpq_tspp_callback(int channel_id, void *user)
 	/* Scheudle a new work to demux workqueue */
 	if (!work_pending(work))
 		queue_work(mpq_dmx_tspp_info.tsif[tsif].workqueue, work);
+}
+
+/**
+ * Add a filter to accept all packets as the last entry
+ * of the TSPP HW filter table.
+ *
+ * @channel_id: Channel ID number.
+ * @source: TSPP source.
+ *
+ * Return  error status
+ */
+static int mpq_tspp_add_accept_all_filter(int channel_id,
+				enum tspp_source source)
+{
+	struct tspp_filter tspp_filter;
+	int tsif = TSPP_GET_TSIF_NUM(channel_id);
+	int ret;
+
+	MPQ_DVB_DBG_PRINT("%s: executed, channel id = %d, source = %d\n",
+		__func__, channel_id, source);
+
+	if (mpq_dmx_tspp_info.tsif[tsif].accept_all_filter_exists_flag) {
+		MPQ_DVB_DBG_PRINT("%s: accept all filter already exists\n",
+				__func__);
+		return 0;
+	}
+
+	/* This filter will be the last entry in the table */
+	tspp_filter.priority = TSPP_LAST_HW_FILTER_INDEX;
+	/* Pass all pids - set mask to 0 */
+	tspp_filter.pid = 0;
+	tspp_filter.mask = 0;
+	/*
+	 * Include TTS in RAW packets, if you change this to
+	 * TSPP_MODE_RAW_NO_SUFFIX you must also change TSPP_RAW_TTS_SIZE
+	 * accordingly.
+	 */
+	tspp_filter.mode = TSPP_MODE_RAW;
+	tspp_filter.source = source;
+	tspp_filter.decrypt = 0;
+
+	ret = tspp_add_filter(0, channel_id, &tspp_filter);
+	if (!ret) {
+		mpq_dmx_tspp_info.tsif[tsif].accept_all_filter_exists_flag = 1;
+		MPQ_DVB_DBG_PRINT(
+				"%s: accept all filter added successfully\n",
+				__func__);
+	}
+
+	return ret;
+}
+
+/**
+ * Remove the filter that accepts all packets from the last entry
+ * of the TSPP HW filter table.
+ *
+ * @channel_id: Channel ID number.
+ * @source: TSPP source.
+ *
+ * Return  error status
+ */
+static int mpq_tspp_remove_accept_all_filter(int channel_id,
+				enum tspp_source source)
+{
+	struct tspp_filter tspp_filter;
+	int tsif = TSPP_GET_TSIF_NUM(channel_id);
+	int ret;
+
+	MPQ_DVB_DBG_PRINT("%s: executed, channel id = %d, source = %d\n",
+		__func__, channel_id, source);
+
+	if (mpq_dmx_tspp_info.tsif[tsif].accept_all_filter_exists_flag == 0) {
+		MPQ_DVB_DBG_PRINT("%s: accept all filter doesn't exist\n",
+				__func__);
+		return 0;
+	}
+
+	tspp_filter.priority = TSPP_LAST_HW_FILTER_INDEX;
+
+	ret = tspp_remove_filter(0, channel_id, &tspp_filter);
+	if (!ret) {
+		mpq_dmx_tspp_info.tsif[tsif].accept_all_filter_exists_flag = 0;
+		MPQ_DVB_DBG_PRINT(
+			"%s: accept all filter removed successfully\n",
+			__func__);
+	}
+
+	return ret;
+}
+
+/**
+ * Add filters designed to accept all packets except NULL packets, i.e.
+ * packets with PID = 0x1FFF.
+ * This function is called after user-defined filters were removed,
+ * so it assumes that the first 13 HW filters in the TSPP filter
+ * table are free for use.
+ *
+ * @channel_id: Channel ID number.
+ * @source: TSPP source.
+ *
+ * Return  0 on success, -1 otherwise
+ */
+static int mpq_tspp_add_null_blocking_filters(int channel_id,
+				enum tspp_source source)
+{
+	struct tspp_filter tspp_filter;
+	int ret = 0;
+	int i, j;
+	u16 full_pid_mask = 0x1FFF;
+	u8 mask_shift;
+	u8 pid_shift;
+	int tsif = TSPP_GET_TSIF_NUM(channel_id);
+
+	MPQ_DVB_DBG_PRINT("%s: executed, channel id = %d, source = %d\n",
+		__func__, channel_id, source);
+
+	/*
+	 * Add a total of 13 filters that will accept packets with
+	 * every PID other than 0x1FFF, which is the NULL PID.
+	 *
+	 * Filter 0: accept all PIDs with bit 12 clear, i.e.
+	 * PID = 0x0000 .. 0x0FFF (4096 PIDs in total):
+	 * Mask = 0x1000, PID = 0x0000.
+	 *
+	 * Filter 12: Accept PID 0x1FFE:
+	 * Mask = 0x1FFF, PID = 0x1FFE.
+	 *
+	 * In general: For N = 0 .. 12,
+	 * Filter <N>: accept all PIDs with <N> MSBits set and bit <N-1> clear.
+	 * Filter <N> Mask = N+1 MSBits set, others clear.
+	 * Filter <N> PID = <N> MSBits set, others clear.
+	 */
+
+	/*
+	 * Include TTS in RAW packets, if you change this to
+	 * TSPP_MODE_RAW_NO_SUFFIX you must also change TSPP_RAW_TTS_SIZE
+	 * accordingly.
+	 */
+	tspp_filter.mode = TSPP_MODE_RAW;
+	tspp_filter.source = source;
+	tspp_filter.decrypt = 0;
+
+	for (i = 0; i < TSPP_BLOCK_NULLS_FILTERS_NUM; i++) {
+		tspp_filter.priority = mpq_tspp_allocate_hw_filter_index(tsif);
+		if (tspp_filter.priority != i) {
+			MPQ_DVB_ERR_PRINT(
+				"%s: got unexpected HW index %d, expected %d\n",
+				__func__, tspp_filter.priority, i);
+			ret = -1;
+			break;
+		}
+		mask_shift = (TSPP_BLOCK_NULLS_FILTERS_NUM - 1 - i);
+		pid_shift = (TSPP_BLOCK_NULLS_FILTERS_NUM - i);
+		tspp_filter.mask =
+			((full_pid_mask >> mask_shift) << mask_shift);
+		tspp_filter.pid = ((full_pid_mask >> pid_shift) << pid_shift);
+
+		if (tspp_add_filter(0, channel_id, &tspp_filter)) {
+			ret = -1;
+			break;
+		}
+	}
+
+	if (ret) {
+		/* cleanup on failure */
+		for (j = 0; j < i; j++) {
+			tspp_filter.priority = j;
+			mpq_tspp_release_hw_filter_index(tsif, j);
+			tspp_remove_filter(0, channel_id, &tspp_filter);
+		}
+	} else {
+		MPQ_DVB_DBG_PRINT(
+			"%s: NULL blocking filters added successfully\n",
+			__func__);
+	}
+
+	return ret;
+}
+
+/**
+ * Remove filters designed to accept all packets except NULL packets, i.e.
+ * packets with PID = 0x1FFF.
+ *
+ * @channel_id: Channel ID number.
+ *
+ * @source: TSPP source.
+ *
+ * Return  0 on success, -1 otherwise
+ */
+static int mpq_tspp_remove_null_blocking_filters(int channel_id,
+				enum tspp_source source)
+{
+	struct tspp_filter tspp_filter;
+	int tsif = TSPP_GET_TSIF_NUM(channel_id);
+	int ret = 0;
+	int i;
+
+	MPQ_DVB_DBG_PRINT("%s: executed, channel id = %d, source = %d\n",
+		__func__, channel_id, source);
+
+	for (i = 0; i < TSPP_BLOCK_NULLS_FILTERS_NUM; i++) {
+		tspp_filter.priority = i;
+		if (tspp_remove_filter(0, channel_id, &tspp_filter)) {
+			MPQ_DVB_ERR_PRINT("%s: failed to remove filter %d\n",
+				__func__, i);
+			ret = -1;
+		}
+
+		mpq_tspp_release_hw_filter_index(tsif, i);
+	}
+
+	return ret;
+}
+
+/**
+ * Add all current user-defined filters (up to 15) as HW filters
+ *
+ * @channel_id: Channel ID number.
+ *
+ * @source: TSPP source.
+ *
+ * Return  0 on success, -1 otherwise
+ */
+static int mpq_tspp_add_all_user_filters(int channel_id,
+				enum tspp_source source)
+{
+	struct tspp_filter tspp_filter;
+	int tsif = TSPP_GET_TSIF_NUM(channel_id);
+	int slot;
+	u16 added_count = 0;
+	u16 total_filters_count = 0;
+
+	MPQ_DVB_DBG_PRINT("%s: executed\n", __func__);
+
+	/*
+	 * Include TTS in RAW packets, if you change this to
+	 * TSPP_MODE_RAW_NO_SUFFIX you must also change TSPP_RAW_TTS_SIZE
+	 * accordingly.
+	 */
+	tspp_filter.mode = TSPP_MODE_RAW;
+	tspp_filter.source = source;
+	tspp_filter.decrypt = 0;
+
+	for (slot = 0; slot < TSPP_MAX_PID_FILTER_NUM; slot++) {
+		if (mpq_dmx_tspp_info.tsif[tsif].filters[slot].pid == -1)
+			continue;
+
+		/*
+		 * count total number of user filters to verify that it is
+		 * exactly TSPP_MAX_HW_PID_FILTER_NUM as expected.
+		 */
+		total_filters_count++;
+
+		if (added_count > TSPP_MAX_HW_PID_FILTER_NUM)
+			continue;
+
+		tspp_filter.priority = mpq_tspp_allocate_hw_filter_index(tsif);
+
+		if (mpq_dmx_tspp_info.tsif[tsif].filters[slot].pid ==
+				TSPP_PASS_THROUGH_PID) {
+			/* pass all pids */
+			tspp_filter.pid = 0;
+			tspp_filter.mask = 0;
+		} else {
+			tspp_filter.pid =
+				mpq_dmx_tspp_info.tsif[tsif].filters[slot].pid;
+			tspp_filter.mask = TSPP_PID_MASK;
+		}
+
+		MPQ_DVB_DBG_PRINT(
+			"%s: adding HW filter, PID = %d, mask = 0x%X, index = %d\n",
+				__func__, tspp_filter.pid, tspp_filter.mask,
+				tspp_filter.priority);
+
+		if (!tspp_add_filter(0, channel_id, &tspp_filter)) {
+			mpq_dmx_tspp_info.tsif[tsif].filters[slot].hw_index =
+				tspp_filter.priority;
+			added_count++;
+		} else {
+			MPQ_DVB_ERR_PRINT("%s: tspp_add_filter failed\n",
+						__func__);
+		}
+	}
+
+	if ((added_count != TSPP_MAX_HW_PID_FILTER_NUM) ||
+		(added_count != total_filters_count))
+		return -EINVAL;
+
+	return 0;
 }
 
 /**
