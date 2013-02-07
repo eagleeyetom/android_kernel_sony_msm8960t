@@ -2464,6 +2464,20 @@ static int mdp_bus_scale_restore_request(void)
 {
 	return 0;
 }
+static int mdp_bus_scale_restore_request(void)
+{
+	pr_debug("%s: index=%d ab=%llu ib=%llu\n", __func__, bus_index,
+		mdp_bus_usecases[bus_index].vectors->ab,
+		mdp_bus_usecases[bus_index].vectors->ib);
+	return mdp_bus_scale_update_request
+		(mdp_bus_usecases[bus_index].vectors->ab,
+		 mdp_bus_usecases[bus_index].vectors->ib);
+}
+#else
+static int mdp_bus_scale_restore_request(void)
+{
+	return 0;
+}
 #endif
 DEFINE_MUTEX(mdp_clk_lock);
 int mdp_set_core_clk(u32 rate)
