@@ -1941,8 +1941,6 @@ int mpq_dmx_decoder_fullness_init(struct dvb_demux_feed *feed)
 
 	dvb_ringbuffer_init(&mpq_feed->sdmx_buf, buf_base, size);
 
-	return 0;
-
 /**
  * Returns whether the free space of decoder's output
  * buffer is larger than specific number of bytes.
