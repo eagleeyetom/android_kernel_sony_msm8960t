@@ -361,14 +361,10 @@ static void kgsl_page_alloc_free(struct kgsl_memdesc *memdesc)
 		kgsl_driver.stats.vmalloc -= memdesc->size;
 	}
 	if (memdesc->sg)
-		for_each_sg(memdesc->sg, sg, sglen, i) {
-			struct page *page = sg_page(sg);
-			if (memdesc->faulted[i] == 1) {
-				memdesc->faulted[i] = 0;
-				__dec_zone_page_state(page, NR_FILE_PAGES);
-			}
-
-			__free_page(page);
+		for_each_sg(memdesc->sg, sg, sglen, i){
+			if (sg->length == 0)
+				break;
+			__free_pages(sg_page(sg), get_order(sg->length));
 		}
 }
 
