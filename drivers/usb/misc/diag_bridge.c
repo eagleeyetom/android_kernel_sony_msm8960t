@@ -437,9 +437,7 @@ diag_bridge_probe(struct usb_interface *ifc, const struct usb_device_id *id)
 	if (ifc_num != (id->driver_info & 0xFF))
 		return -ENODEV;
 
-	/* This needs to figure out ID based on PID and/or host bus type */
-	devid = 0;
-
+	devid = (id->driver_info >> 8) & 0xFF;
 	if (devid < 0 || devid >= MAX_DIAG_BRIDGE_DEVS)
 		return -ENODEV;
 
