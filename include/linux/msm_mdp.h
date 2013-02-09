@@ -579,6 +579,8 @@ enum {
 };
 
 #ifdef __KERNEL__
+
+#ifdef __KERNEL__
 int msm_fb_get_iommu_domain(void);
 /* get the framebuffer physical address information */
 int get_fb_phys_info(unsigned long *start, unsigned long *len, int fb_num,
