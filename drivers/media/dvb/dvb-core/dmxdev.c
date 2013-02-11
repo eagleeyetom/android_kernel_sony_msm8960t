@@ -1360,11 +1360,6 @@ static int dvb_dmxdev_get_buffer_status(
 	struct dvb_ringbuffer *buf = &dmxdevfilter->buffer;
 	ssize_t flush_len;
 
-	if (!buf->data)
-		return -EINVAL;
-
-	spin_lock_irq(&dmxdevfilter->dev->lock);
-
 	if ((dmxdevfilter->type == DMXDEV_TYPE_PES) &&
 		(dmxdevfilter->params.pes.output == DMX_OUT_DECODER)) {
 		struct dmxdev_feed *feed;
