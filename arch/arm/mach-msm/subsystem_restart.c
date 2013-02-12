@@ -309,7 +309,7 @@ static void do_epoch_check(struct subsys_device *dev)
 	if (time_first && n >= max_restarts_check) {
 		if ((curr_time->tv_sec - time_first->tv_sec) <
 				max_history_time_check) {
-			WARN(1, "Subsystems have crashed %d times in less than "\
+			panic("Subsystems have crashed %d times in less than "\
 				"%ld seconds!", max_restarts_check,
 				max_history_time_check);
 	}
@@ -348,7 +348,7 @@ static void subsystem_shutdown(struct subsys_device *dev, void *data)
 
 	pr_info("[%p]: Shutting down %s\n", current, name);
 	if (dev->desc->shutdown(dev->desc) < 0) {
-		WARN(1, "subsys-restart: [%p]: Failed to shutdown %s!",
+		panic("subsys-restart: [%p]: Failed to shutdown %s!",
 			current, name);
 	subsys_set_state(dev, SUBSYS_OFFLINE);
 }
@@ -368,7 +368,7 @@ static void subsystem_powerup(struct subsys_device *dev, void *data)
 
 	pr_info("[%p]: Powering up %s\n", current, name);
 	if (dev->desc->powerup(dev->desc) < 0) {
-		WARN(1, "[%p]: Failed to powerup %s!", current, name);
+		panic("[%p]: Failed to powerup %s!", current, name);
 	}
 }
 
@@ -425,7 +425,7 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 	 * order is being rebooted.
 	 */
 	if (!mutex_trylock(powerup_lock)) {
-		WARN(1, "%s[%p]: Subsystem died during powerup!",
+		panic("%s[%p]: Subsystem died during powerup!",
 						__func__, current);
 
 	do_epoch_check(dev);
@@ -779,11 +779,8 @@ static int __init subsys_restart_init(void)
 	restart_level = RESET_SOC;
 
 	ssr_wq = alloc_workqueue("ssr_wq", WQ_CPU_INTENSIVE, 0);
-
-	if (!ssr_wq) {
-		pr_err("%s: out of memory\n", __func__);
-		return -ENOMEM;
-	}
+	if (!ssr_wq)
+		panic("%s: out of memory\n", __func__);
 
 	return ssr_init_soc_restart_orders();
 }
