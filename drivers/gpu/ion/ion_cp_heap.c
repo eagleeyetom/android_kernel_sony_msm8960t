@@ -137,10 +137,12 @@ static int ion_cp_protect(struct ion_heap *heap, int version, void *data)
 
 	if (atomic_inc_return(&cp_heap->protect_cnt) == 1) {
 		/* Make sure we are in C state when the heap is protected. */
-		if (cp_heap->reusable && !cp_heap->allocated_bytes) {
-			ret_value = fmem_set_state(FMEM_C_STATE);
-			if (ret_value)
+		if (!cp_heap->allocated_bytes) {
+			ret_value = ion_on_first_alloc(heap);
+			if (ret_value) {
+				atomic_dec(&cp_heap->protect_cnt);
 				goto out;
+			}
 		}
 
 		ret_value = ion_cp_protect_mem(cp_heap->secure_base,
