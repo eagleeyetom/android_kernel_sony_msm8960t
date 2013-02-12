@@ -350,9 +350,6 @@ struct msm_vpe_clock_rate {
 #define	VFE_RDI_COMPOSITE				(1 << 0)
 #define	VFE_RDI_NON_COMPOSITE			(1 << 1)
 
-#define	VFE_RDI_COMPOSITE				(1 << 0)
-#define	VFE_RDI_NON_COMPOSITE			(1 << 1)
-
 #define VFE_STATS_TYPE_LEGACY		0
 #define VFE_STATS_TYPE_BAYER		(1 << 2)
 
