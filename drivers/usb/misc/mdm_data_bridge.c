@@ -134,6 +134,20 @@ static int get_data_bridge_chid(char *xport_name)
 	return -ENODEV;
 }
 
+static int get_data_bridge_chid(char *xport_name)
+{
+	struct data_bridge	*dev;
+	int			i;
+
+	for (i = 0; i < MAX_BRIDGE_DEVICES; i++) {
+		dev = __dev[i];
+		if (!strncmp(dev->name, xport_name, BRIDGE_NAME_MAX_LEN))
+			return i;
+	}
+
+	return -ENODEV;
+}
+
 static inline  bool rx_halted(struct data_bridge *dev)
 {
 	return test_bit(RX_HALT, &dev->flags);
