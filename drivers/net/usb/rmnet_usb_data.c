@@ -507,7 +507,6 @@ static int rmnet_usb_probe(struct usb_interface *iface,
 		const struct usb_device_id *prod)
 {
 	struct usbnet		*unet;
-	struct driver_info	*info = (struct driver_info *)prod->driver_info;
 	struct usb_device	*udev;
 	int			status = 0;
 
@@ -596,17 +595,6 @@ static const struct driver_info rmnet_info = {
 	.tx_fixup      = rmnet_usb_tx_fixup,
 	.rx_fixup      = rmnet_usb_rx_fixup,
 	.manage_power  = rmnet_usb_manage_power,
-	.data          = 0,
-};
-
-static const struct driver_info rmnet_usb_info = {
-	.description   = "RmNET net device",
-	.flags         = FLAG_SEND_ZLP,
-	.bind          = rmnet_usb_bind,
-	.tx_fixup      = rmnet_usb_tx_fixup,
-	.rx_fixup      = rmnet_usb_rx_fixup,
-	.manage_power  = rmnet_usb_manage_power,
-	.data          = 1,
 };
 
 static const struct usb_device_id vidpids[] = {
@@ -642,18 +630,6 @@ static const struct usb_device_id vidpids[] = {
 	},
 	{ USB_DEVICE_INTERFACE_NUMBER(0x05c6, 0x904c, 8),
 	.driver_info = (unsigned long)&rmnet_info,
-	},
-	{ USB_DEVICE_INTERFACE_NUMBER(0x05c6, 0x9079, 5),
-	.driver_info = (unsigned long)&rmnet_usb_info,
-	},
-	{ USB_DEVICE_INTERFACE_NUMBER(0x05c6, 0x9079, 6),
-	.driver_info = (unsigned long)&rmnet_usb_info,
-	},
-	{ USB_DEVICE_INTERFACE_NUMBER(0x05c6, 0x9079, 7),
-	.driver_info = (unsigned long)&rmnet_usb_info,
-	},
-	{ USB_DEVICE_INTERFACE_NUMBER(0x05c6, 0x9079, 8),
-	.driver_info = (unsigned long)&rmnet_usb_info,
 	},
 
 	{ }, /* Terminating entry */
