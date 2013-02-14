@@ -1994,6 +1994,21 @@ static struct mdm_platform_data amdm_platform_data = {
 	.no_a2m_errfatal_on_ssr = 1,
 };
 
+static struct mdm_platform_data amdm_platform_data = {
+	.mdm_version = "3.0",
+	.ramdump_delay_ms = 2000,
+	.early_power_on = 1,
+	.sfr_query = 1,
+	.send_shdn = 1,
+	.vddmin_resource = &mdm_vddmin_rscs,
+	.peripheral_platform_device = &apq8064_device_hsic_host,
+	.ramdump_timeout_ms = 120000,
+	.mdm2ap_status_gpio_run_cfg = &mdm2ap_status_gpio_run_cfg,
+	.sysmon_subsys_id_valid = 1,
+	.sysmon_subsys_id = SYSMON_SS_EXT_MODEM,
+	.no_a2m_errfatal_on_ssr = 1,
+};
+
 static struct mdm_vddmin_resource bmdm_vddmin_rscs = {
 	.rpm_id = MSM_RPM_ID_VDDMIN_GPIO,
 	.ap2mdm_vddmin_gpio = 30,
