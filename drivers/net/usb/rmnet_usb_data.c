@@ -28,7 +28,6 @@
 /* net device name prefixes, indexed by driver_info->data */
 static const char * const rmnet_names[] = {
 	"rmnet_usb%d",
-	"rmnet2_usb%d",
 };
 
 static int	data_msg_dbg_mask;
@@ -507,6 +506,7 @@ static int rmnet_usb_probe(struct usb_interface *iface,
 		const struct usb_device_id *prod)
 {
 	struct usbnet		*unet;
+	struct driver_info	*info = (struct driver_info *)prod->driver_info;
 	struct usb_device	*udev;
 	int			status = 0;
 
@@ -595,6 +595,7 @@ static const struct driver_info rmnet_info = {
 	.tx_fixup      = rmnet_usb_tx_fixup,
 	.rx_fixup      = rmnet_usb_rx_fixup,
 	.manage_power  = rmnet_usb_manage_power,
+	.data          = 0,
 };
 
 static const struct usb_device_id vidpids[] = {
