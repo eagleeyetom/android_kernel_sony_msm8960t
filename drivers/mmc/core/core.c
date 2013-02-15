@@ -459,6 +459,7 @@ void mmc_bkops_completion_polling(struct work_struct *work)
 			pr_debug("%s: %s: completed BKOPs, exit polling\n",
 				 mmc_hostname(card->host), __func__);
 			mmc_card_clr_doing_bkops(card);
+			card->bkops_info.sectors_changed = 0;
 			goto out;
 		}
 
