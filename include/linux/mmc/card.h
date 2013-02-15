@@ -487,15 +487,8 @@ static inline void __maybe_unused remove_quirk(struct mmc_card *card, int data)
 #define mmc_card_set_removed(c) ((c)->state |= MMC_CARD_REMOVED)
 #define mmc_card_set_sleep(c) ((c)->state |= MMC_STATE_SLEEP)
 
-#define mmc_card_set_doing_bkops(c)	((c)->state |= MMC_STATE_DOING_BKOPS)
-#define mmc_card_clr_doing_bkops(c)	((c)->state &= ~MMC_STATE_DOING_BKOPS)
-<<<<<<< HEAD
-#define mmc_card_clr_sleep(c)		((c)->state &= ~MMC_STATE_SLEEP)
-
-=======
 #define mmc_card_set_need_bkops(c)	((c)->state |= MMC_STATE_NEED_BKOPS)
 #define mmc_card_clr_need_bkops(c)	((c)->state &= ~MMC_STATE_NEED_BKOPS)
->>>>>>> ec0bbad... mmc: Do not perform blocking BKOPS
 /*
  * Quirk add/remove for MMC products.
  */
