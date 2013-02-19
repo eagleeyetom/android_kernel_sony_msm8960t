@@ -456,29 +456,8 @@ static void pm8xxx_tm_work(struct work_struct *work)
 
 	thermal_zone_device_update(chip->tz_dev);
 
-	if (stage != chip->prev_stage) {
-		chip->prev_stage = stage;
-
-		switch (chip->cdata.adc_type) {
-		case PM8XXX_TM_ADC_NONE:
-			rc = pm8xxx_tz_get_temp_no_adc(chip->tz_dev, &temp);
-			break;
-		case PM8XXX_TM_ADC_PM8058_ADC:
-			rc = pm8xxx_tz_get_temp_pm8058_adc(chip->tz_dev, &temp);
-			break;
-		case PM8XXX_TM_ADC_PM8XXX_ADC:
-			rc = pm8xxx_tz_get_temp_pm8xxx_adc(chip->tz_dev, &temp);
-			break;
-		}
-		if (rc < 0)
-			goto bail;
-
-		pr_crit("%s: PMIC Temp Alarm - stage=%u, threshold=%u, temp=%lu mC\n",
-			chip->cdata.tm_name, stage, thresh, temp);
-
-		/* Notify user space */
-		sysfs_notify(&chip->tz_dev->device.kobj, NULL, "type");
-	}
+	/* Notify user space */
+	sysfs_notify(&chip->tz_dev->device.kobj, NULL, "type");
 
 bail:
 	return;
