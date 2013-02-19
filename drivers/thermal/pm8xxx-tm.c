@@ -432,7 +432,7 @@ static void pm8xxx_tm_work(struct work_struct *work)
 	struct delayed_work *dwork
 		= container_of(work, struct delayed_work, work);
 	struct pm8xxx_tm_chip *chip
-		= container_of(work, struct pm8xxx_tm_chip, irq_work);
+		= container_of(dwork, struct pm8xxx_tm_chip, irq_work);
 	unsigned long temp = 0;
 	int rc, stage, thresh;
 	u8 reg;
