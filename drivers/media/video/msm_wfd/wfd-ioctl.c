@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -282,13 +282,26 @@ int wfd_allocate_input_buffers(struct wfd_device *wfd_dev,
 		rc = wfd_allocate_ion_buffer(wfd_dev->ion_client,
 				wfd_dev->secure_device, enc_mregion);
 		if (rc) {
-			WFD_MSG_ERR("Failed to allocate input memory."
-				" This error causes memory leak!!!\n");
+			WFD_MSG_ERR("Failed to allocate input memory\n");
 			goto alloc_fail;
 		}
 
-		WFD_MSG_DBG("NOTE: enc paddr = %p, kvaddr = %p\n",
-				enc_mregion->paddr,
+		mmap_context.mregion = enc_mregion;
+		mmap_context.ion_client = wfd_dev->ion_client;
+		rc = v4l2_subdev_call(&wfd_dev->enc_sdev, core, ioctl,
+				ENC_MMAP, &mmap_context);
+		if (rc) {
+			WFD_MSG_ERR("Failed to map input memory\n");
+			goto alloc_fail;
+		} else if (!enc_mregion->paddr) {
+			WFD_MSG_ERR("ENC_MMAP returned success" \
+				"but failed to map input memory\n");
+			rc = -EINVAL;
+			goto alloc_fail;
+		}
+		WFD_MSG_DBG("NOTE: enc paddr = [%p->%p], kvaddr = %p\n",
+				enc_mregion->paddr, (int8_t *)
+				enc_mregion->paddr + enc_mregion->size,
 				enc_mregion->kvaddr);
 
 		rc = v4l2_subdev_call(&wfd_dev->enc_sdev, core, ioctl,
@@ -324,14 +337,22 @@ int wfd_allocate_input_buffers(struct wfd_device *wfd_dev,
 				(unsigned long *)&mdp_mregion->size, 0, 0);
 		}
 
-		if (rc || !mdp_mregion->paddr) {
+		if (rc) {
 			WFD_MSG_ERR(
 				"Failed to map to mdp, rc = %d, paddr = 0x%p\n",
 				rc, mdp_mregion->paddr);
 			mdp_mregion->kvaddr = NULL;
 			mdp_mregion->paddr = NULL;
 			mdp_mregion->ion_handle = NULL;
-			goto alloc_fail;
+			goto mdp_mmap_fail;
+		} else if (!mdp_mregion->paddr) {
+			WFD_MSG_ERR("MDP_MMAP returned success" \
+				"but failed to map to MDP\n");
+			rc = -EINVAL;
+			mdp_mregion->kvaddr = NULL;
+			mdp_mregion->paddr = NULL;
+			mdp_mregion->ion_handle = NULL;
+			goto mdp_mmap_fail;
 		}
 
 		mdp_buf.inst = inst->mdp_inst;
