@@ -2547,10 +2547,10 @@ static void pm8921_charger_vbus_draw_local(
 	 * This would also apply when the battery has been
 	 * removed from the running system.
 	 */
-	if (the_chip && !get_prop_batt_present(the_chip)
+	if (mA == 0 && the_chip && !get_prop_batt_present(the_chip)
 		&& !is_dc_chg_plugged_in(the_chip)) {
 		if (!the_chip->has_dc_supply) {
-			pr_err("rejected: no other power source connected\n");
+			pr_err("rejected: no other power source mA = %d\n", mA);
 			return;
 		}
 	}
