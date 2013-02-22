@@ -559,28 +559,11 @@ static int ib_add_gpu_object(struct kgsl_device *device, unsigned int ptbase,
 					push_object(device,
 						SNAPSHOT_OBJ_TYPE_IB, ptbase,
 						gpuaddr, size);
-				else {
-					ret = ib_add_gpu_object(device,
-						ptbase, gpuaddr, size);
-
-					/*
-					 * If adding the IB failed then stop
-					 * parsing
-					 */
-					if (ret < 0)
-						goto done;
-				}
-			} else {
-				ret = ib_parse_type3(device, &src[i], ptbase);
-				/*
-				 * If the parse function failed (probably
-				 * because of a bad decode) then bail out and
-				 * just capture the binary IB data
-				 */
-
-				if (ret < 0)
-					goto done;
-			}
+				else
+					ib_add_gpu_object(device, ptbase,
+						gpuaddr, size);
+			} else
+				ib_parse_type3(device, &src[i], ptbase);
 		} else if (pkt_is_type0(src[i])) {
 			ib_parse_type0(device, &src[i], ptbase);
 		}
