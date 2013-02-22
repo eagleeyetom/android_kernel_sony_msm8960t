@@ -2533,9 +2533,6 @@ static void pm8921_charger_vbus_draw_local(
 {
 	int set_usb_now_ma;
 
-	if (id >= SRC_ID_MAX_NUM)
-		return;
-
 	pr_debug("Enter charge=%d\n", mA);
 
 	/*
@@ -2547,7 +2544,7 @@ static void pm8921_charger_vbus_draw_local(
 	 * This would also apply when the battery has been
 	 * removed from the running system.
 	 */
-	if (mA == 0 && the_chip && !get_prop_batt_present(the_chip)
+	if (the_chip && !get_prop_batt_present(the_chip)
 		&& !is_dc_chg_plugged_in(the_chip)) {
 		if (!the_chip->has_dc_supply) {
 			pr_err("rejected: no other power source mA = %d\n", mA);
@@ -2568,13 +2565,18 @@ static void pm8921_charger_vbus_draw_local(
 	if (usb_target_ma)
 		usb_target_ma = mA;
 
-	spin_lock_irqsave(&vbus_lock, flags);
-	if (the_chip) {
-		if (mA > USB_WALL_THRESHOLD_MA)
-			__pm8921_charger_vbus_draw(USB_WALL_THRESHOLD_MA);
-		else
-			__pm8921_charger_vbus_draw(mA);
-	} else {
+
+	if (mA > USB_WALL_THRESHOLD_MA)
+		set_usb_now_ma = USB_WALL_THRESHOLD_MA;
+	else
+		set_usb_now_ma = mA;
+
+	if (the_chip && the_chip->disable_aicl)
+		set_usb_now_ma = mA;
+
+	if (the_chip)
+		__pm8921_charger_vbus_draw(set_usb_now_ma);
+	else
 		/*
 		 * called before pmic initialized,
 		 * save this value and use it at probe
