@@ -2706,11 +2706,6 @@ unsigned int adreno_ft_detect(struct kgsl_device *device,
 	unsigned int long_ib_detected = 1;
 	unsigned int i;
 	static unsigned long next_hang_detect_time;
-	static unsigned int prev_global_ts;
-	unsigned int curr_global_ts = 0;
-	unsigned int curr_context_id = 0;
-	static struct adreno_context *curr_context;
-	static struct kgsl_context *context;
 
 	if (!adreno_dev->fast_hang_detect)
 		fast_hang_detected = 0;
@@ -2770,27 +2765,19 @@ unsigned int adreno_ft_detect(struct kgsl_device *device,
 
 		mb();
 
-		if (curr_context != NULL) {
+	/*
+	 * Time interval between hang detection should be KGSL_TIMEOUT_PART
+	 * or more, if next hang detection is requested < KGSL_TIMEOUT_PART
+	 * from the last time do nothing.
+	 */
+	if ((next_hang_detect_time) &&
+		(time_before(jiffies, next_hang_detect_time)))
+			return 0;
+	else
+		next_hang_detect_time = (jiffies +
+			msecs_to_jiffies(KGSL_TIMEOUT_PART-1));
 
-			curr_context->ib_gpu_time_used += KGSL_TIMEOUT_PART;
-			KGSL_FT_INFO(device,
-			"Proc %s used GPU Time %d ms on timestamp 0x%X\n",
-			curr_context->pid_name, curr_context->ib_gpu_time_used,
-			curr_global_ts+1);
-
-			for (i = 0; i < ft_detect_regs_count; i++) {
-				if (curr_reg_val[i] != prev_reg_val[i]) {
-					fast_hang_detected = 0;
-
-					/* Check for long IB here */
-					if ((i >=
-						LONG_IB_DETECT_REG_INDEX_START)
-						&&
-						(i <=
-						LONG_IB_DETECT_REG_INDEX_END))
-						long_ib_detected = 0;
-				}
-			}
+	for (i = 0; i < hang_detect_regs_count; i++) {
 
 			if (fast_hang_detected) {
 				KGSL_FT_ERR(device,
