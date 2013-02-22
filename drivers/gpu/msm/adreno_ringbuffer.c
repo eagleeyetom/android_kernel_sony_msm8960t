@@ -950,7 +950,7 @@ adreno_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 	drawctxt = context->devctxt;
 
 	if (drawctxt->flags & CTXT_FLAGS_GPU_HANG) {
-		KGSL_CTXT_ERR(device, "Context %p failed fault tolerance"
+		KGSL_CTXT_ERR(device, "proc %s failed fault tolerance"
 			" will not accept commands for context %d\n",
 			drawctxt->pid_name, drawctxt->id);
 		return -EDEADLK;
@@ -958,9 +958,9 @@ adreno_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 
 	if (drawctxt->flags & CTXT_FLAGS_SKIP_EOF) {
 		KGSL_CTXT_ERR(device,
-			"Context %p triggered fault tolerance"
+			"proc %s triggered fault tolerance"
 			" skipping commands for context till EOF %d\n",
-			drawctxt, drawctxt->id);
+			drawctxt->pid_name, drawctxt->id);
 		if (flags & KGSL_CMD_FLAGS_EOF)
 			drawctxt->flags &= ~CTXT_FLAGS_SKIP_EOF;
 		numibs = 0;

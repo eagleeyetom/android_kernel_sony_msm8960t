@@ -103,6 +103,9 @@ struct adreno_device {
 	unsigned int ib_check_level;
 	unsigned int fast_hang_detect;
 	unsigned int ft_policy;
+	unsigned int long_ib_detect;
+	unsigned int long_ib;
+	unsigned int long_ib_ts;
 	unsigned int gpulist_index;
 	struct ocmem_buf *ocmem_hdl;
 	unsigned int ocmem_base;

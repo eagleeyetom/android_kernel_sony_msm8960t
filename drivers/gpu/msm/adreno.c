@@ -1702,9 +1702,35 @@ _adreno_ft_resubmit_rb(struct kgsl_device *device,
 
 
 static int
+_adreno_check_long_ib(struct kgsl_device *device)
+{
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	unsigned int curr_global_ts = 0;
+
+	/* check if the global ts is still the same */
+	kgsl_sharedmem_readl(&device->memstore,
+			&curr_global_ts,
+			KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL,
+			eoptimestamp));
+
+	/* Mark long ib as handled */
+	adreno_dev->long_ib = 0;
+
+	if (curr_global_ts == adreno_dev->long_ib_ts) {
+		KGSL_FT_ERR(device,
+			"IB ran too long, invalidate ctxt\n");
+		return 1;
+	} else {
+		/* Do nothing GPU has gone ahead */
+		KGSL_FT_INFO(device, "false long ib detection return\n");
+		return 0;
+	}
+}
+
+static int
 _adreno_ft_restart_device(struct kgsl_device *device,
-					   struct kgsl_context *context,
-					   struct adreno_ft_data *ft_data)
+		   struct kgsl_context *context,
+		   struct adreno_ft_data *ft_data)
 {
 
 	struct adreno_context *adreno_context = context->devctxt;
@@ -1735,6 +1761,37 @@ _adreno_ft_restart_device(struct kgsl_device *device,
 	return 0;
 }
 
+static inline void
+_adreno_debug_ft_info(struct kgsl_device *device,
+			struct adreno_ft_data *ft_data)
+{
+
+	/*
+	 * Dumping rb is a very useful tool to debug FT.
+	 * It will tell us if we are extracting the rb correctly
+	 * NOP'ing the right IB, skipping the EOF correctly etc.
+	 */
+	if (device->ft_log >= 7)  {
+
+		/* Print fault tolerance data here */
+		KGSL_FT_INFO(device, "Temp RB buffer size 0x%X\n",
+			ft_data->rb_size);
+		adreno_dump_rb(device, ft_data->rb_buffer,
+			ft_data->rb_size<<2, 0, ft_data->rb_size);
+
+		KGSL_FT_INFO(device, "Bad RB buffer size 0x%X\n",
+			ft_data->bad_rb_size);
+		adreno_dump_rb(device, ft_data->bad_rb_buffer,
+			ft_data->bad_rb_size<<2, 0, ft_data->bad_rb_size);
+
+		KGSL_FT_INFO(device, "Good RB buffer size 0x%X\n",
+			ft_data->good_rb_size);
+		adreno_dump_rb(device, ft_data->good_rb_buffer,
+			ft_data->good_rb_size<<2, 0, ft_data->good_rb_size);
+
+	}
+}
+
 static int
 _adreno_ft_resubmit_rb(struct kgsl_device *device,
 			struct adreno_ringbuffer *rb,
@@ -1743,6 +1800,8 @@ _adreno_ft_resubmit_rb(struct kgsl_device *device,
 			unsigned int *buff, unsigned int size)
 {
 	unsigned int ret = 0;
+
+	_adreno_debug_ft_info(device, ft_data);
 
 	if (_adreno_ft_restart_device(device, context, ft_data))
 		return 1;
@@ -1790,10 +1849,21 @@ _adreno_ft(struct kgsl_device *device,
 	 * hang */
 	adreno_ringbuffer_extract(rb, ft_data);
 
+	/* Check if we detected a long running IB,
+	 * if true do not attempt replay of bad cmds */
+	if (adreno_dev->long_ib) {
+		if (_adreno_check_long_ib(device)) {
+			_adreno_debug_ft_info(device, ft_data);
+			goto play_good_cmds;
+		} else {
+			adreno_context->flags &= ~CTXT_FLAGS_GPU_HANG;
+			return 0;
+		}
+	}
+
 	/* Do not try the bad commands if  hang is due to a fault */
 	if (ft_data->fault) {
 		KGSL_FT_ERR(device, "Page fault no FT for bad context\n");
-
 		goto play_good_cmds;
 	}
 
@@ -1985,6 +2055,7 @@ adreno_dump_and_exec_ft(struct kgsl_device *device)
 {
 	int result = -ETIMEDOUT;
 	struct adreno_ft_data ft_data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
 	if (device->state == KGSL_STATE_HUNG)
 		goto done;
@@ -2001,11 +2072,6 @@ adreno_dump_and_exec_ft(struct kgsl_device *device)
 
 		/* Get the fault tolerance data as soon as hang is detected */
 		result = adreno_setup_ft_data(device, &ft_data);
-		/*
-		 * Trigger an automatic dump of the state to
-		 * the console
-		 */
-		kgsl_postmortem_dump(device, 0);
 
 		/*
 		 * If long ib is detected, do not attempt postmortem or
@@ -2032,13 +2098,6 @@ adreno_dump_and_exec_ft(struct kgsl_device *device)
 			adreno_destroy_ft_data(&ft_data);
 		}
 
-		/* restore power level */
-		kgsl_pwrctrl_pwrlevel_change(device, curr_pwrlevel);
-
-		if (!result) {
-			result = adreno_ft(device, &ft_data);
-			adreno_destroy_ft_data(&ft_data);
-		}
 		if (result) {
 			kgsl_pwrctrl_set_state(device, KGSL_STATE_HUNG);
 		} else {
@@ -2635,15 +2694,17 @@ unsigned int adreno_ft_detect(struct kgsl_device *device,
 	unsigned int long_ib_detected = 1;
 	unsigned int i;
 	static unsigned long next_hang_detect_time;
+	static unsigned int prev_global_ts;
+	unsigned int curr_global_ts = 0;
+	unsigned int curr_context_id = 0;
+	static struct adreno_context *curr_context;
+	static struct kgsl_context *context;
 
 	if (!adreno_dev->fast_hang_detect)
 		fast_hang_detected = 0;
 
 	if (!adreno_dev->long_ib_detect)
 		long_ib_detected = 0;
-
-	if (is_adreno_rbbm_status_idle(device))
-		return 0;
 
 	/*
 	 * Time interval between hang detection should be KGSL_TIMEOUT_PART
@@ -2706,7 +2767,64 @@ unsigned int adreno_ft_detect(struct kgsl_device *device,
 		next_hang_detect_time = (jiffies +
 			msecs_to_jiffies(KGSL_TIMEOUT_PART-1));
 
-	for (i = 0; i < hang_detect_regs_count; i++) {
+	/* Read the current Hang detect reg values here */
+	for (i = 0; i < ft_detect_regs_count; i++) {
+		if (ft_detect_regs[i] == 0)
+			continue;
+		adreno_regread(device, ft_detect_regs[i],
+			&curr_reg_val[i]);
+	}
+
+	/* Read the current global timestamp here */
+	kgsl_sharedmem_readl(&device->memstore,
+			&curr_global_ts,
+			KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL,
+			eoptimestamp));
+
+	mb();
+
+	if (curr_global_ts == prev_global_ts) {
+
+		/* Get the current context here */
+		if (context == NULL) {
+			kgsl_sharedmem_readl(&device->memstore,
+				&curr_context_id,
+				KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL,
+				current_context));
+			context = idr_find(&device->context_idr,
+				curr_context_id);
+			if (context != NULL) {
+				curr_context = context->devctxt;
+				curr_context->ib_gpu_time_used = 0;
+			} else {
+				KGSL_DRV_ERR(device,
+					"Fault tolerance no context found\n");
+			}
+		}
+
+		mb();
+
+		if (curr_context != NULL) {
+
+			curr_context->ib_gpu_time_used += KGSL_TIMEOUT_PART;
+			KGSL_FT_INFO(device,
+			"Proc %s used GPU Time %d ms on timestamp 0x%X\n",
+			curr_context->pid_name, curr_context->ib_gpu_time_used,
+			curr_global_ts+1);
+
+			for (i = 0; i < ft_detect_regs_count; i++) {
+				if (curr_reg_val[i] != prev_reg_val[i]) {
+					fast_hang_detected = 0;
+
+					/* Check for long IB here */
+					if ((i >=
+						LONG_IB_DETECT_REG_INDEX_START)
+						&&
+						(i <=
+						LONG_IB_DETECT_REG_INDEX_END))
+						long_ib_detected = 0;
+				}
+			}
 
 			if (fast_hang_detected) {
 				KGSL_FT_ERR(device,
@@ -2719,9 +2837,7 @@ unsigned int adreno_ft_detect(struct kgsl_device *device,
 				return 1;
 			}
 
-			if ((long_ib_detected) &&
-				(!(curr_context->flags &
-				 CTXT_FLAGS_NO_FAULT_TOLERANCE))) {
+			if (long_ib_detected) {
 				curr_context->ib_gpu_time_used +=
 					KGSL_TIMEOUT_PART;
 				if (curr_context->ib_gpu_time_used >
@@ -2796,7 +2912,7 @@ static int adreno_handle_hang(struct kgsl_device *device,
 	adreno_regread(device, REG_CP_RB_RPTR, &rptr);
 	mb();
 
-	KGSL_DRV_ERR(device,
+	KGSL_DRV_WARN(device,
 		     "Device hang detected while waiting for timestamp: "
 		     "<%d:0x%x>, last submitted timestamp: <%d:0x%x>, "
 		     "retired timestamp: <%d:0x%x>, wptr: 0x%x, rptr: 0x%x\n",
