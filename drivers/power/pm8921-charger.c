@@ -2568,18 +2568,13 @@ static void pm8921_charger_vbus_draw_local(
 	if (usb_target_ma)
 		usb_target_ma = mA;
 
-
-	if (mA > USB_WALL_THRESHOLD_MA)
-		set_usb_now_ma = USB_WALL_THRESHOLD_MA;
-	else
-		set_usb_now_ma = mA;
-
-	if (the_chip && the_chip->disable_aicl)
-		set_usb_now_ma = mA;
-
-	if (the_chip)
-		__pm8921_charger_vbus_draw(set_usb_now_ma);
-	else
+	spin_lock_irqsave(&vbus_lock, flags);
+	if (the_chip) {
+		if (mA > USB_WALL_THRESHOLD_MA)
+			__pm8921_charger_vbus_draw(USB_WALL_THRESHOLD_MA);
+		else
+			__pm8921_charger_vbus_draw(mA);
+	} else {
 		/*
 		 * called before pmic initialized,
 		 * save this value and use it at probe
