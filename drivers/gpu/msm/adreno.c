@@ -1419,9 +1419,9 @@ static void adreno_set_max_ts_for_bad_ctxs(struct kgsl_device *device)
 
 static void adreno_destroy_ft_data(struct adreno_ft_data *ft_data)
 {
-	vfree(ft_data->rb_buffer);
-	vfree(ft_data->bad_rb_buffer);
-	vfree(ft_data->good_rb_buffer);
+	vfree(rec_data->rb_buffer);
+	vfree(rec_data->bad_rb_buffer);
+	vfree(rec_data->good_rb_buffer);
 }
 
 static int _find_start_of_cmd_seq(struct adreno_ringbuffer *rb,
@@ -1603,7 +1603,7 @@ static int adreno_setup_recovery_data(struct kgsl_device *device,
 			current_context));
 
 	kgsl_sharedmem_readl(&device->memstore,
-			&ft_data->global_eop,
+			&rec_data->global_eop,
 			KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL,
 			eoptimestamp));
 
@@ -1629,7 +1629,17 @@ static int adreno_setup_recovery_data(struct kgsl_device *device,
 		ret = -ENOMEM;
 		goto done;
 	}
+
+	rec_data->good_rb_buffer = vmalloc(rb->buffer_desc.size);
+	if (!rec_data->good_rb_buffer) {
+		KGSL_MEM_ERR(device, "vmalloc(%d) failed\n",
+				rb->buffer_desc.size);
+		ret = -ENOMEM;
+		goto done;
+	}
 	rec_data->fault = device->mmu.fault;
+	rec_data->step =  adreno_dev->ft_policy;
+
 	/* find the start of bad command sequence in rb */
 	context = idr_find(&device->context_idr, rec_data->context_id);
 	/* Look for the command stream that is right after the global eop */
@@ -1666,101 +1676,9 @@ static int adreno_setup_recovery_data(struct kgsl_device *device,
 
 done:
 	if (ret) {
-		vfree(ft_data->rb_buffer);
-		vfree(ft_data->bad_rb_buffer);
-		vfree(ft_data->good_rb_buffer);
-	}
-	return ret;
-}
-
-static int
-_adreno_check_long_ib(struct kgsl_device *device)
-{
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	unsigned int curr_global_ts = 0;
-
-	/* check if the global ts is still the same */
-	kgsl_sharedmem_readl(&device->memstore,
-			&curr_global_ts,
-			KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL,
-			eoptimestamp));
-
-	/* Mark long ib as handled */
-	adreno_dev->long_ib = 0;
-
-	if (curr_global_ts == adreno_dev->long_ib_ts) {
-		KGSL_FT_ERR(device,
-			"IB ran too long, invalidate ctxt\n");
-		return 1;
-	} else {
-		/* Do nothing GPU has gone ahead */
-		KGSL_FT_INFO(device, "false long ib detection return\n");
-		return 0;
-	}
-}
-
-static int
-_adreno_ft_restart_device(struct kgsl_device *device,
-		   struct kgsl_context *context,
-		   struct adreno_ft_data *ft_data)
-{
-
-	struct adreno_context *adreno_context = context->devctxt;
-
-	/* restart device */
-	if (adreno_stop(device)) {
-		KGSL_FT_ERR(device, "Device stop failed\n");
-		return 1;
-	}
-
-	if (adreno_start(device, true)) {
-		KGSL_FT_ERR(device, "Device start failed\n");
-		return 1;
-	}
-
-	if (context)
-		kgsl_mmu_setstate(&device->mmu, adreno_context->pagetable,
-			KGSL_MEMSTORE_GLOBAL);
-
-	/* If iommu is used then we need to make sure that the iommu clocks
-	 * are on since there could be commands in pipeline that touch iommu */
-	if (KGSL_MMU_TYPE_IOMMU == kgsl_mmu_get_mmutype()) {
-		if (kgsl_mmu_enable_clk(&device->mmu,
-				KGSL_IOMMU_CONTEXT_USER))
-			return 1;
-	}
-
-	return 0;
-}
-
-static inline void
-_adreno_debug_ft_info(struct kgsl_device *device,
-			struct adreno_ft_data *ft_data)
-{
-
-	/*
-	 * Dumping rb is a very useful tool to debug FT.
-	 * It will tell us if we are extracting the rb correctly
-	 * NOP'ing the right IB, skipping the EOF correctly etc.
-	 */
-	if (device->ft_log >= 7)  {
-
-		/* Print fault tolerance data here */
-		KGSL_FT_INFO(device, "Temp RB buffer size 0x%X\n",
-			ft_data->rb_size);
-		adreno_dump_rb(device, ft_data->rb_buffer,
-			ft_data->rb_size<<2, 0, ft_data->rb_size);
-
-		KGSL_FT_INFO(device, "Bad RB buffer size 0x%X\n",
-			ft_data->bad_rb_size);
-		adreno_dump_rb(device, ft_data->bad_rb_buffer,
-			ft_data->bad_rb_size<<2, 0, ft_data->bad_rb_size);
-
-		KGSL_FT_INFO(device, "Good RB buffer size 0x%X\n",
-			ft_data->good_rb_size);
-		adreno_dump_rb(device, ft_data->good_rb_buffer,
-			ft_data->good_rb_size<<2, 0, ft_data->good_rb_size);
-
+		vfree(rec_data->rb_buffer);
+		vfree(rec_data->bad_rb_buffer);
+		vfree(rec_data->good_rb_buffer);
 	}
 }
 
@@ -1791,8 +1709,65 @@ _adreno_ft_resubmit_rb(struct kgsl_device *device,
 
 
 static int
-_adreno_ft(struct kgsl_device *device,
-			struct adreno_ft_data *ft_data)
+_adreno_restart_device(struct kgsl_device *device,
+					   struct kgsl_context *context)
+{
+
+	struct adreno_context *adreno_context = context->devctxt;
+
+	/* restart device */
+	if (adreno_stop(device)) {
+		KGSL_DRV_ERR(device, "Device stop failed in recovery\n");
+		return 1;
+	}
+
+	if (adreno_start(device, true)) {
+		KGSL_DRV_ERR(device, "Device start failed in recovery\n");
+		return 1;
+	}
+
+	if (context)
+		kgsl_mmu_setstate(&device->mmu, adreno_context->pagetable,
+			KGSL_MEMSTORE_GLOBAL);
+
+	/* If iommu is used then we need to make sure that the iommu clocks
+	 * are on since there could be commands in pipeline that touch iommu */
+	if (KGSL_MMU_TYPE_IOMMU == kgsl_mmu_get_mmutype()) {
+		if (kgsl_mmu_enable_clk(&device->mmu,
+				KGSL_IOMMU_CONTEXT_USER))
+			return 1;
+	}
+
+	return 0;
+}
+
+static int
+_adreno_recovery_resubmit(struct kgsl_device *device,
+			struct adreno_ringbuffer *rb,
+			struct kgsl_context *context,
+			struct adreno_recovery_data *rec_data,
+			unsigned int *buff, unsigned int size)
+{
+	unsigned int ret = 0;
+
+	if (_adreno_restart_device(device, context))
+		return 1;
+
+	if (size) {
+
+		/* submit commands and wait for them to pass */
+		adreno_ringbuffer_restore(rb, buff, size);
+
+		ret = adreno_idle(device);
+	}
+
+	return ret;
+}
+
+
+static int
+_adreno_recover_hang(struct kgsl_device *device,
+			struct adreno_recovery_data *rec_data)
 {
 	int ret = 0, i;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
@@ -1831,126 +1806,112 @@ _adreno_ft(struct kgsl_device *device,
 	adreno_ringbuffer_extract(rb, rec_data);
 
 	/* Do not try the bad commands if  hang is due to a fault */
-	if (device->mmu.fault) {
-		KGSL_FT_ERR(device, "MMU fault skipping bad cmds\n");
-		device->mmu.fault = 0;
+	if (rec_data->fault)
 		goto play_good_cmds;
-	}
 
-	if (ft_data->ft_policy & KGSL_FT_DISABLE) {
-		KGSL_FT_ERR(device, "NO FT policy play only good cmds\n");
-		goto play_good_cmds;
-	}
+	if (rec_data->step == FT_REPLAY_BAD_CTXT_CMDS) {
 
-	if (ft_data->ft_policy & KGSL_FT_REPLAY) {
+		ret = _adreno_recovery_resubmit(device, rb, context, rec_data,
+				rec_data->bad_rb_buffer, rec_data->bad_rb_size);
 
-		ret = _adreno_ft_resubmit_rb(device, rb, context, ft_data,
-				ft_data->bad_rb_buffer, ft_data->bad_rb_size);
-
-		if (ret) {
-			KGSL_FT_ERR(device, "Replay unsuccessful\n");
-			ft_data->status = 1;
-		} else
+		if (ret)
+			rec_data->step = FT_NOT_IB_BAD_CTXT_CMDS;
+		else
 			goto play_good_cmds;
+
 	}
 
-	if (ft_data->ft_policy & KGSL_FT_SKIPIB) {
+	if (rec_data->step == FT_NOT_IB_BAD_CTXT_CMDS) {
 
-		for (i = 0; i < ft_data->bad_rb_size; i++) {
-			if ((ft_data->bad_rb_buffer[i] ==
-					CP_HDR_INDIRECT_BUFFER_PFD) &&
-				(ft_data->bad_rb_buffer[i+1] == ft_data->ib1)) {
+		for (i = 0; i < rec_data->bad_rb_size; i++) {
+			if ((rec_data->bad_rb_buffer[i] ==
+				CP_HDR_INDIRECT_BUFFER_PFD) &&
+				(rec_data->bad_rb_buffer[i+1] ==
+				rec_data->ib1)) {
 
-				ft_data->bad_rb_buffer[i] = cp_nop_packet(2);
-				ft_data->bad_rb_buffer[i+1] =
+				rec_data->bad_rb_buffer[i] = cp_nop_packet(2);
+				rec_data->bad_rb_buffer[i+1] =
 							KGSL_NOP_IB_IDENTIFIER;
-				ft_data->bad_rb_buffer[i+2] =
+				rec_data->bad_rb_buffer[i+2] =
 							KGSL_NOP_IB_IDENTIFIER;
 				break;
 			}
 		}
 
-		if ((i == (ft_data->bad_rb_size)) || (!ft_data->ib1)) {
-			KGSL_FT_ERR(device, "Bad IB to NOP not found\n");
-			ft_data->status = 1;
+		if ((i == (rec_data->bad_rb_size)) || (!rec_data->ib1)) {
+			KGSL_DRV_ERR(device, "Bad IB to NOP not found\n");
+			rec_data->step = FT_FAIL_BAD_CTXT_CMDS;
 			goto play_good_cmds;
 		}
 
-		ret = _adreno_ft_resubmit_rb(device, rb, context, ft_data,
-				ft_data->bad_rb_buffer, ft_data->bad_rb_size);
+		ret = _adreno_recovery_resubmit(device, rb, context, rec_data,
+				rec_data->bad_rb_buffer, rec_data->bad_rb_size);
 
 		if (ret) {
-			KGSL_FT_ERR(device, "NOP faulty IB unsuccessful\n");
-			ft_data->status = 1;
-		} else {
-			ft_data->status = 0;
+			KGSL_DRV_ERR(device, "NOP faulty IB unsuccessful\n");
+			rec_data->step = FT_SKIP_EOF_BAD_CTXT_CMDS;
+		} else
 			goto play_good_cmds;
-		}
 	}
 
-	if (ft_data->ft_policy & KGSL_FT_SKIPFRAME) {
+	if (rec_data->step == FT_SKIP_EOF_BAD_CTXT_CMDS) {
 
-		for (i = 0; i < ft_data->bad_rb_size; i++) {
-			if (ft_data->bad_rb_buffer[i] ==
-					KGSL_END_OF_FRAME_IDENTIFIER) {
-				ft_data->bad_rb_buffer[0] = cp_nop_packet(i);
+		for (i = 0; i < rec_data->bad_rb_size; i++) {
+			if (rec_data->bad_rb_buffer[i] ==
+				KGSL_END_OF_FRAME_IDENTIFIER) {
+				rec_data->bad_rb_buffer[0] = cp_nop_packet(i);
 				break;
 			}
 		}
 
 		/* EOF not found in RB, discard till EOF in
 		   next IB submission */
-		if (i == ft_data->bad_rb_size) {
+		if (i == rec_data->bad_rb_size) {
 			adreno_context->flags |= CTXT_FLAGS_SKIP_EOF;
-			KGSL_FT_INFO(device,
-			"EOF not found in RB, skip next issueib till EOF\n");
-			ft_data->bad_rb_buffer[0] = cp_nop_packet(i);
+			rec_data->bad_rb_buffer[0] = cp_nop_packet(i);
 		}
 
-		ret = _adreno_ft_resubmit_rb(device, rb, context, ft_data,
-				ft_data->bad_rb_buffer, ft_data->bad_rb_size);
+		ret = _adreno_recovery_resubmit(device, rb, context, rec_data,
+				rec_data->bad_rb_buffer, rec_data->bad_rb_size);
 
 		if (ret) {
-			KGSL_FT_ERR(device, "Skip EOF unsuccessful\n");
-			ft_data->status = 1;
-		} else {
-			ft_data->status = 0;
+			KGSL_DRV_ERR(device, "Skip EOF unsuccessful\n");
+			rec_data->step = FT_FAIL_BAD_CTXT_CMDS;
+		} else
 			goto play_good_cmds;
-		}
 	}
 
 play_good_cmds:
 
-	if (ft_data->status)
-		KGSL_FT_ERR(device, "Bad context commands failed\n");
+	if (rec_data->step == FT_FAIL_BAD_CTXT_CMDS)
+		KGSL_DRV_ERR(device, "Bad context commands failed\n");
 	else {
-		KGSL_FT_INFO(device, "Bad context commands success\n");
 
 		if (adreno_context) {
 			adreno_context->flags = (adreno_context->flags &
-				~CTXT_FLAGS_GPU_HANG) | CTXT_FLAGS_GPU_HANG_FT;
+			~CTXT_FLAGS_GPU_HANG) | CTXT_FLAGS_GPU_HANG_RECOVERED;
 		}
 		adreno_dev->drawctxt_active = last_active_ctx;
 	}
 
-	ret = _adreno_ft_resubmit_rb(device, rb, context, ft_data,
-			ft_data->good_rb_buffer, ft_data->good_rb_size);
+	ret = _adreno_recovery_resubmit(device, rb, context, rec_data,
+			rec_data->good_rb_buffer, rec_data->good_rb_size);
 
 	if (ret) {
 		/* If we fail here we can try to invalidate another
 		 * context and try fault tolerance again */
 		ret = -EAGAIN;
-		KGSL_FT_ERR(device, "Playing good commands unsuccessful\n");
+		KGSL_DRV_ERR(device, "Playing good commands unsuccessful\n");
 		goto done;
-	} else
-		KGSL_FT_INFO(device, "Playing good commands successful\n");
+	}
+
 
 	/* ringbuffer now has data from the last valid context id,
 	 * so restore the active_ctx to the last valid context */
-	if (ft_data->last_valid_ctx_id) {
+	if (rec_data->last_valid_ctx_id) {
 		struct kgsl_context *last_ctx =
 				idr_find(&device->context_idr,
-				ft_data->last_valid_ctx_id);
+				rec_data->last_valid_ctx_id);
 		if (last_ctx)
 			adreno_dev->drawctxt_active = last_ctx->devctxt;
 	}
@@ -1983,7 +1944,7 @@ adreno_ft(struct kgsl_device *device,
 	 * multiple contexts hang the GPU */
 	while (true) {
 
-		ret = _adreno_ft(device, ft_data);
+		ret = _adreno_recover_hang(device, rec_data);
 
 		if (-EAGAIN == ret) {
 			/* setup new fault tolerance parameters and retry, this
