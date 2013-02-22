@@ -147,11 +147,11 @@ struct adreno_gpudev {
  * good_rb_size - Number of valid dwords in good_rb_buffer
  * @last_valid_ctx_id - The last context from which commands were placed in
  * ringbuffer before the GPU hung
- * @step - Current recovery step being executed
- * @err_code - Recovery error code
+ * @step - Current fault tolerance step being executed
+ * @err_code - Fault tolerance error code
  * @fault - Indicates whether the hang was caused due to a pagefault
  * @start_of_replay_cmds - Offset in ringbuffer from where commands can be
- * replayed during recovery
+ * replayed during fault tolerance
  * @replay_for_snapshot - Offset in ringbuffer where IB's can be saved for
  * replaying with snapshot
  */
@@ -167,7 +167,6 @@ struct adreno_ft_data {
 	unsigned int good_rb_size;
 	unsigned int last_valid_ctx_id;
 	unsigned int step;
-	unsigned int err_code;
 	int fault;
 	unsigned int start_of_replay_cmds;
 	unsigned int replay_for_snapshot;
@@ -175,12 +174,11 @@ struct adreno_ft_data {
 
 enum ft_steps {
 	FT_REPLAY_BAD_CTXT_CMDS = 0,
-	FT_NOT_IB_BAD_CTXT_CMDS,
+	FT_NOP_IB_BAD_CTXT_CMDS,
 	FT_SKIP_EOF_BAD_CTXT_CMDS,
 	FT_FAIL_BAD_CTXT_CMDS,
 	FT_PLAY_GOOD_CTXT_CMDS
 };
-
 
 extern struct adreno_gpudev adreno_a2xx_gpudev;
 extern struct adreno_gpudev adreno_a3xx_gpudev;
