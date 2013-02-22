@@ -1032,17 +1032,6 @@ adreno_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 	adreno_idle(device);
 #endif
 
-	/*
-	 * If context hung and recovered then return error so that the
-	 * application may handle it
-	 */
-	if (drawctxt->flags & CTXT_FLAGS_GPU_HANG_FT) {
-		drawctxt->flags &= ~CTXT_FLAGS_GPU_HANG_FT;
-		return -EPROTO;
-	} else
-		return 0;
-}
-
 static void _turn_preamble_on_for_ib_seq(struct adreno_ringbuffer *rb,
 				unsigned int rb_rptr)
 {
@@ -1088,13 +1077,16 @@ static void _turn_preamble_on_for_ib_seq(struct adreno_ringbuffer *rb,
 }
 
 void adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
-				struct adreno_ft_data *ft_data)
+				struct adreno_recovery_data *rec_data)
 {
 	struct kgsl_device *device = rb->device;
-	unsigned int rb_rptr = ft_data->start_of_replay_cmds;
-	unsigned int good_rb_idx = 0, bad_rb_idx = 0, temp_rb_idx = 0;
-	unsigned int last_good_cmd_end_idx = 0, last_bad_cmd_end_idx = 0;
-	unsigned int cmd_start_idx = 0;
+	unsigned int rb_rptr = rec_data->start_of_replay_cmds;
+	unsigned int *temp_rb_buffer = rec_data->rb_buffer;
+	int *rb_size = &rec_data->rb_size;
+	unsigned int *bad_rb_buffer = rec_data->bad_rb_buffer;
+	int *bad_rb_size = &rec_data->bad_rb_size;
+
+	unsigned int good_rb_idx = 0, cmd_start_idx = 0;
 	unsigned int val1 = 0;
 	int copy_rb_contents = 0;
 	unsigned int temp_rb_rptr;
@@ -1116,6 +1108,21 @@ void adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
 		return;
 
 	k_ctxt = idr_find(&device->context_idr, ft_data->context_id);
+	if (k_ctxt) {
+		a_ctxt = k_ctxt->devctxt;
+		if (a_ctxt->flags & CTXT_FLAGS_PREAMBLE)
+			_turn_preamble_on_for_ib_seq(rb, rb_rptr);
+	}
+	k_ctxt = NULL;
+
+	/*
+	 * If the start index from where commands need to be copied is invalid
+	 * then no need to save off any commands
+	 */
+	if (0xFFFFFFFF == rec_data->start_of_replay_cmds)
+		return;
+
+	k_ctxt = idr_find(&device->context_idr, rec_data->context_id);
 	if (k_ctxt) {
 		a_ctxt = k_ctxt->devctxt;
 		if (a_ctxt->flags & CTXT_FLAGS_PREAMBLE)
@@ -1163,9 +1170,9 @@ void adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
 				for (temp_idx = cmd_start_idx;
 					temp_idx < temp_rb_idx;
 					temp_idx++)
-					good_rb_buffer[good_rb_idx++] =
-						temp_rb_buffer[temp_idx];
-				ft_data->last_valid_ctx_id = val2;
+					temp_rb_buffer[good_rb_idx++] =
+						bad_rb_buffer[temp_idx];
+				rec_data->last_valid_ctx_id = val2;
 				copy_rb_contents = 1;
 				/* remove the good commands from bad buffer */
 				bad_rb_idx = last_bad_cmd_end_idx;
@@ -1202,7 +1209,6 @@ void adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
 	}
 	*good_rb_size = good_rb_idx;
 	*bad_rb_size = bad_rb_idx;
-	*rb_size = temp_rb_idx;
 }
 
 void

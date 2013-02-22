@@ -156,7 +156,7 @@ struct adreno_gpudev {
  * @err_code - Fault tolerance error code
  * @fault - Indicates whether the hang was caused due to a pagefault
  * @start_of_replay_cmds - Offset in ringbuffer from where commands can be
- * replayed during fault tolerance
+ * replayed during recovery
  * @replay_for_snapshot - Offset in ringbuffer where IB's can be saved for
  * replaying with snapshot
  */
@@ -171,9 +171,7 @@ struct adreno_ft_data {
 	unsigned int *good_rb_buffer;
 	unsigned int good_rb_size;
 	unsigned int last_valid_ctx_id;
-	unsigned int status;
-	unsigned int ft_policy;
-	unsigned int err_code;
+	int fault;
 	unsigned int start_of_replay_cmds;
 	unsigned int replay_for_snapshot;
 };
