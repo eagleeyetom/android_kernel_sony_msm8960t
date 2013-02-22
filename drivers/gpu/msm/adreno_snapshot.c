@@ -355,9 +355,6 @@ static int ib_parse_draw_indx(struct kgsl_device *device, unsigned int *pkt,
 		ret = kgsl_snapshot_get_object(device, ptbase,
 				sp_vs_pvt_mem_addr, 8192,
 				SNAPSHOT_GPU_OBJECT_GENERIC);
-		if (ret < 0)
-			return -EINVAL;
-
 		snapshot_frozen_objsize += ret;
 		sp_vs_pvt_mem_addr = 0;
 	}
@@ -403,8 +400,6 @@ static int ib_parse_draw_indx(struct kgsl_device *device, unsigned int *pkt,
 
 	vfd_control_0 = 0;
 	vfd_index_max = 0;
-
-	return ret;
 }
 
 /*
@@ -523,7 +518,7 @@ static int ib_add_gpu_object(struct kgsl_device *device, unsigned int ptbase,
 	 */
 
 	if (kgsl_snapshot_have_object(device, ptbase, gpuaddr, dwords << 2))
-		return 0;
+		return;
 
 	src = (unsigned int *) adreno_convertaddr(device, ptbase, gpuaddr,
 		dwords << 2);
