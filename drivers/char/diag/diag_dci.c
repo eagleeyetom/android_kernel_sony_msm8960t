@@ -173,7 +173,8 @@ void extract_dci_events(unsigned char *buf)
 	uint16_t event_id, event_id_packet;
 	uint8_t *event_mask_ptr, byte_mask, payload_len;
 	uint8_t event_data[MAX_EVENT_SIZE], timestamp[8];
-	int i, byte_index, bit_index, length, temp_len;
+	unsigned int byte_index;
+	int i, bit_index, length, temp_len;
 	int total_event_len, payload_len_field, timestamp_len;
 	struct diag_dci_client_tbl *entry;
 
@@ -248,7 +249,8 @@ void extract_dci_log(unsigned char *buf)
 {
 	uint16_t log_code, item_num;
 	uint8_t equip_id, *log_mask_ptr, byte_mask;
-	int i, byte_index, found = 0;
+	unsigned int byte_index;
+	int i, found = 0;
 	struct diag_dci_client_tbl *entry;
 
 	log_code = *(uint16_t *)(buf+6);
@@ -401,6 +403,10 @@ int diag_send_dci_pkt(struct diag_master_table entry, unsigned char *buf,
 
 	/* remove UID from user space pkt before sending to peripheral */
 	buf = buf + 4;
+	if (len > APPS_BUF_SIZE - 10) {
+		pr_err("diag: dci: buffer overwrite possible since payload bigger than buf size\n");
+		return -EIO;
+	}
 	len = len - 4;
 	mutex_lock(&driver->dci_mutex);
 	/* prepare DCI packet */
@@ -469,9 +475,13 @@ int diag_register_dci_transaction(int uid)
 int diag_process_dci_client(unsigned char *buf, int len)
 {
 	unsigned char *temp = buf;
-	uint16_t subsys_cmd_code;
-	int subsys_id, cmd_code, i, ret = -1, index = -1;
+	uint16_t subsys_cmd_code, log_code, item_num;
+	int subsys_id, cmd_code, ret = -1, index = -1, found = 0, read_len = 0;
 	struct diag_master_table entry;
+	int count, set_mask, num_codes, bit_index, event_id, offset = 0, i;
+	unsigned int byte_index;
+	uint8_t equip_id, *log_mask_ptr, *head_log_mask_ptr, byte_mask;
+	uint8_t *event_mask_ptr;
 
 	if (!driver->smd_dci[MODEM_DATA].ch) {
 		pr_err("diag: DCI smd channel for peripheral %d not valid for dci updates\n",
@@ -506,14 +516,68 @@ int diag_process_dci_client(unsigned char *buf, int len)
 					ret = diag_send_dci_pkt(entry, buf, len,
 								 index);
 				}
-			} else if (entry.cmd_code == 255 &&
-				  entry.subsys_id == 255) {
-				if (entry.cmd_code_lo <=
-						 cmd_code &&
-						 entry.
-						cmd_code_hi >= cmd_code) {
-					ret = diag_send_dci_pkt(entry, buf, len,
-								 index);
+			}
+		}
+	} else if (*(int *)temp == DCI_LOG_TYPE) {
+		/* find client id and table */
+		for (i = 0; i < MAX_DCI_CLIENTS; i++) {
+			if (driver->dci_client_tbl[i].client != NULL) {
+				if (driver->dci_client_tbl[i].client->tgid ==
+							current->tgid) {
+					found = 1;
+					break;
+				}
+			}
+		}
+		if (!found) {
+			pr_err("diag: dci client not registered/found\n");
+			return ret;
+		}
+		/* Extract each log code and put in client table */
+		temp += 4;
+		read_len += 4;
+		set_mask = *(int *)temp;
+		temp += 4;
+		read_len += 4;
+		num_codes = *(int *)temp;
+		temp += 4;
+		read_len += 4;
+
+		head_log_mask_ptr = driver->dci_client_tbl[i].dci_log_mask;
+		pr_debug("diag: head of dci log mask %p\n", head_log_mask_ptr);
+		count = 0; /* iterator for extracting log codes */
+		while (count < num_codes) {
+			if (read_len >= USER_SPACE_DATA) {
+				pr_err("diag: dci: Log type, possible buffer overflow\n");
+				return -EIO;
+			}
+			log_code = *(uint16_t *)temp;
+			equip_id = LOG_GET_EQUIP_ID(log_code);
+			item_num = LOG_GET_ITEM_NUM(log_code);
+			byte_index = item_num/8 + 2;
+			if (byte_index >= (DCI_MAX_ITEMS_PER_LOG_CODE+2)) {
+				pr_err("diag: dci: Log type, invalid byte index\n");
+				return ret;
+			}
+			byte_mask = 0x01 << (item_num % 8);
+			/*
+			 * Parse through log mask table and find
+			 * relevant range
+			 */
+			log_mask_ptr = head_log_mask_ptr;
+			found = 0;
+			offset = 0;
+			while (log_mask_ptr && (offset < DCI_LOG_MASK_SIZE)) {
+				if (*log_mask_ptr == equip_id) {
+					found = 1;
+					pr_debug("diag: find equip id = %x at %p\n",
+						 equip_id, log_mask_ptr);
+					break;
+				} else {
+					pr_debug("diag: did not find equip id = %x at %p\n",
+						 equip_id, log_mask_ptr);
+					log_mask_ptr += 514;
+					offset += 514;
 				}
 			}
 			if (!found) {
@@ -531,6 +595,7 @@ int diag_process_dci_client(unsigned char *buf, int len)
 				offset, byte_index,
 				byte_mask);
 			temp += 2;
+			read_len += 2;
 			count++;
 			ret = DIAG_DCI_NO_ERROR;
 		}
@@ -553,17 +618,28 @@ int diag_process_dci_client(unsigned char *buf, int len)
 		}
 		/* Extract each log code and put in client table */
 		temp += 4;
+		read_len += 4;
 		set_mask = *(int *)temp;
 		temp += 4;
+		read_len += 4;
 		num_codes = *(int *)temp;
 		temp += 4;
+		read_len += 4;
 
 		event_mask_ptr = driver->dci_client_tbl[i].dci_event_mask;
 		pr_debug("diag: head of dci event mask %p\n", event_mask_ptr);
 		count = 0; /* iterator for extracting log codes */
 		while (count < num_codes) {
+			if (read_len >= USER_SPACE_DATA) {
+				pr_err("diag: dci: Event type, possible buffer overflow\n");
+				return -EIO;
+			}
 			event_id = *(int *)temp;
 			byte_index = event_id/8;
+			if (byte_index >= DCI_EVENT_MASK_SIZE) {
+				pr_err("diag: dci: Event type, invalid byte index\n");
+				return ret;
+			}
 			bit_index = event_id % 8;
 			byte_mask = 0x1 << bit_index;
 			/*
@@ -577,6 +653,7 @@ int diag_process_dci_client(unsigned char *buf, int len)
 			/* add to cumulative mask */
 			update_dci_cumulative_event_mask(byte_index, byte_mask);
 			temp += sizeof(int);
+			read_len += sizeof(int);
 			count++;
 			ret = DIAG_DCI_NO_ERROR;
 		}
@@ -586,6 +663,183 @@ int diag_process_dci_client(unsigned char *buf, int len)
 		pr_alert("diag: Incorrect DCI transaction\n");
 	}
 	return ret;
+}
+
+void update_dci_cumulative_event_mask(int offset, uint8_t byte_mask)
+{
+	int i;
+	uint8_t *event_mask_ptr;
+	uint8_t *update_ptr = dci_cumulative_event_mask;
+	bool is_set = false;
+
+	mutex_lock(&dci_event_mask_mutex);
+	update_ptr += offset;
+	for (i = 0; i < MAX_DCI_CLIENTS; i++) {
+		event_mask_ptr =
+			driver->dci_client_tbl[i].dci_event_mask;
+		event_mask_ptr += offset;
+		if ((*event_mask_ptr & byte_mask) == byte_mask) {
+			is_set = true;
+			/* break even if one client has the event mask set */
+			break;
+		}
+	}
+	if (is_set == false)
+		*update_ptr &= ~byte_mask;
+	else
+		*update_ptr |= byte_mask;
+	mutex_unlock(&dci_event_mask_mutex);
+}
+
+int diag_send_dci_event_mask(smd_channel_t *ch)
+{
+	void *buf = driver->buf_event_mask_update;
+	int header_size = sizeof(struct diag_ctrl_event_mask);
+	int wr_size = -ENOMEM, retry_count = 0, timer;
+	int ret = DIAG_DCI_NO_ERROR;
+
+	mutex_lock(&driver->diag_cntl_mutex);
+	/* send event mask update */
+	driver->event_mask->cmd_type = DIAG_CTRL_MSG_EVENT_MASK;
+	driver->event_mask->data_len = 7 + DCI_EVENT_MASK_SIZE;
+	driver->event_mask->stream_id = DCI_MASK_STREAM;
+	driver->event_mask->status = 3; /* status for valid mask */
+	driver->event_mask->event_config = 1; /* event config */
+	driver->event_mask->event_mask_size = DCI_EVENT_MASK_SIZE;
+	memcpy(buf, driver->event_mask, header_size);
+	memcpy(buf+header_size, dci_cumulative_event_mask, DCI_EVENT_MASK_SIZE);
+	if (ch) {
+		while (retry_count < 3) {
+			wr_size = smd_write(ch, buf,
+					 header_size + DCI_EVENT_MASK_SIZE);
+			if (wr_size == -ENOMEM) {
+				retry_count++;
+				for (timer = 0; timer < 5; timer++)
+					udelay(2000);
+			} else {
+				break;
+			}
+		}
+		if (wr_size != header_size + DCI_EVENT_MASK_SIZE) {
+			pr_err("diag: error writing dci event mask %d, tried %d\n",
+				 wr_size, header_size + DCI_EVENT_MASK_SIZE);
+			ret = DIAG_DCI_SEND_DATA_FAIL;
+		}
+	} else {
+		pr_err("diag: ch not valid for dci event mask update\n");
+		ret = DIAG_DCI_SEND_DATA_FAIL;
+	}
+	mutex_unlock(&driver->diag_cntl_mutex);
+
+	return ret;
+}
+
+void update_dci_cumulative_log_mask(int offset, unsigned int byte_index,
+						uint8_t byte_mask)
+{
+	int i;
+	uint8_t *update_ptr = dci_cumulative_log_mask;
+	uint8_t *log_mask_ptr;
+	bool is_set = false;
+
+	mutex_lock(&dci_log_mask_mutex);
+	*update_ptr = 0;
+	/* set the equipment IDs */
+	for (i = 0; i < 16; i++)
+		*(update_ptr + (i*514)) = i;
+
+	update_ptr += offset;
+	/* update the dirty bit */
+	*(update_ptr+1) = 1;
+	update_ptr = update_ptr + byte_index;
+	for (i = 0; i < MAX_DCI_CLIENTS; i++) {
+		log_mask_ptr =
+			(driver->dci_client_tbl[i].dci_log_mask);
+		log_mask_ptr = log_mask_ptr + offset + byte_index;
+		if ((*log_mask_ptr & byte_mask) == byte_mask) {
+			is_set = true;
+			/* break even if one client has the log mask set */
+			break;
+		}
+	}
+
+	if (is_set == false)
+		*update_ptr &= ~byte_mask;
+	else
+		*update_ptr |= byte_mask;
+	mutex_unlock(&dci_log_mask_mutex);
+}
+
+int diag_send_dci_log_mask(smd_channel_t *ch)
+{
+	void *buf = driver->buf_log_mask_update;
+	int header_size = sizeof(struct diag_ctrl_log_mask);
+	uint8_t *log_mask_ptr = dci_cumulative_log_mask;
+	int i, wr_size = -ENOMEM, retry_count = 0, timer;
+	int ret = DIAG_DCI_NO_ERROR;
+
+	if (!ch) {
+		pr_err("diag: ch not valid for dci log mask update\n");
+		return DIAG_DCI_SEND_DATA_FAIL;
+	}
+
+	mutex_lock(&driver->diag_cntl_mutex);
+	for (i = 0; i < 16; i++) {
+		driver->log_mask->cmd_type = DIAG_CTRL_MSG_LOG_MASK;
+		driver->log_mask->num_items = 512;
+		driver->log_mask->data_len  = 11 + 512;
+		driver->log_mask->stream_id = DCI_MASK_STREAM;
+		driver->log_mask->status = 3; /* status for valid mask */
+		driver->log_mask->equip_id = *log_mask_ptr;
+		driver->log_mask->log_mask_size = 512;
+		memcpy(buf, driver->log_mask, header_size);
+		memcpy(buf+header_size, log_mask_ptr+2, 512);
+		/* if dirty byte is set and channel is valid */
+		if (ch && *(log_mask_ptr+1)) {
+			while (retry_count < 3) {
+				wr_size = smd_write(ch, buf, header_size + 512);
+				if (wr_size == -ENOMEM) {
+					retry_count++;
+					for (timer = 0; timer < 5; timer++)
+						udelay(2000);
+				} else
+					break;
+			}
+			if (wr_size != header_size + 512) {
+				pr_err("diag: dci log mask update failed %d, tried %d",
+					 wr_size, header_size + 512);
+				ret = DIAG_DCI_SEND_DATA_FAIL;
+
+			} else {
+				*(log_mask_ptr+1) = 0; /* clear dirty byte */
+				pr_debug("diag: updated dci log equip ID %d\n",
+						 *log_mask_ptr);
+			}
+		}
+		log_mask_ptr += 514;
+	}
+	mutex_unlock(&driver->diag_cntl_mutex);
+
+	return ret;
+}
+
+void create_dci_log_mask_tbl(unsigned char *tbl_buf)
+{
+	uint8_t i; int count = 0;
+
+	/* create hard coded table for log mask with 16 categories */
+	for (i = 0; i < 16; i++) {
+		*(uint8_t *)tbl_buf = i;
+		pr_debug("diag: put value %x at %p\n", i, tbl_buf);
+		memset(tbl_buf+1, 0, 513); /* set dirty bit as 0 */
+		tbl_buf += 514;
+		count += 514;
+	}
+}
+
+void create_dci_event_mask_tbl(unsigned char *tbl_buf)
+{
+	memset(tbl_buf, 0, 512);
 }
 
 static int diag_dci_runtime_suspend(struct device *dev)
