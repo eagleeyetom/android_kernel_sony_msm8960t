@@ -241,6 +241,11 @@ static int mipi_toshiba_lcd_off(struct platform_device *pdev)
 	return 0;
 }
 
+static int mipi_toshiba_lcd_late_init(struct platform_device *pdev)
+{
+	return 0;
+}
+
 void mipi_bklight_pwm_cfg(void)
 {
 	if (mipi_toshiba_pdata && mipi_toshiba_pdata->dsi_pwm_cfg)
