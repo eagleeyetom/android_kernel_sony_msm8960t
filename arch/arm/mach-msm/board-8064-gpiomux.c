@@ -1523,46 +1523,20 @@ static struct msm_gpiomux_config apq8064_sdc3_configs[] __initdata = {
 	},
 };
 
-static struct gpiomux_setting gsbi6_uartdm_active = {
-	.func = GPIOMUX_FUNC_2,
-	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_NONE,
-};
-
-static struct gpiomux_setting gsbi6_uartdm_suspended = {
-	.func = GPIOMUX_FUNC_GPIO,
-	.drv = GPIOMUX_DRV_2MA,
-	.pull = GPIOMUX_PULL_DOWN,
-};
-
-static struct msm_gpiomux_config mpq8064_uartdm_configs[] __initdata = {
-	{ /* UARTDM_TX */
-		.gpio      = 14,
+static struct msm_gpiomux_config sglte2_qsc_configs[] __initdata = {
+	/* MDM2AP_STATUS */
+	{
+		.gpio = 51,
 		.settings = {
-			[GPIOMUX_ACTIVE]    = &gsbi6_uartdm_active,
-			[GPIOMUX_SUSPENDED] = &gsbi6_uartdm_suspended,
-		},
+			[GPIOMUX_SUSPENDED] = &mdm2ap_status_cfg,
+		}
 	},
-	{ /* UARTDM_RX */
-		.gpio      = 15,
+	/* MDM2AP_ERRFATAL */
+	{
+		.gpio = 52,
 		.settings = {
-			[GPIOMUX_ACTIVE]    = &gsbi6_uartdm_active,
-			[GPIOMUX_SUSPENDED] = &gsbi6_uartdm_suspended,
-		},
-	},
-	{ /* UARTDM_CTS */
-		.gpio      = 16,
-		.settings = {
-			[GPIOMUX_ACTIVE]    = &gsbi6_uartdm_active,
-			[GPIOMUX_SUSPENDED] = &gsbi6_uartdm_suspended,
-		},
-	},
-	{ /* UARTDM_RFR */
-		.gpio      = 17,
-		.settings = {
-			[GPIOMUX_ACTIVE]    = &gsbi6_uartdm_active,
-			[GPIOMUX_SUSPENDED] = &gsbi6_uartdm_suspended,
-		},
+			[GPIOMUX_SUSPENDED] = &mdm2ap_errfatal_cfg,
+		}
 	},
 };
 
@@ -1648,12 +1622,19 @@ void __init apq8064_init_gpiomux(void)
 					ARRAY_SIZE(amdm_configs));
 			msm_gpiomux_install(bmdm_configs,
 				ARRAY_SIZE(bmdm_configs));
-		} else if (SOCINFO_VERSION_MINOR(platform_version) == 1)
-			msm_gpiomux_install(mdm_i2s_configs,
-					ARRAY_SIZE(mdm_i2s_configs));
-		else
+		} else if (socinfo_get_platform_subtype() ==
+					PLATFORM_SUBTYPE_SGLTE2) {
 			msm_gpiomux_install(mdm_configs,
 					ARRAY_SIZE(mdm_configs));
+			msm_gpiomux_install(sglte2_qsc_configs,
+					ARRAY_SIZE(sglte2_qsc_configs));
+		} else if (SOCINFO_VERSION_MINOR(platform_version) == 1) {
+			msm_gpiomux_install(mdm_i2s_configs,
+					ARRAY_SIZE(mdm_i2s_configs));
+		} else {
+			msm_gpiomux_install(mdm_configs,
+					ARRAY_SIZE(mdm_configs));
+		}
 	}
 
 	if (machine_is_apq8064_mtp()) {

@@ -43,6 +43,7 @@
 #include "msm_watchdog.h"
 #include "rpm_stats.h"
 #include "rpm_log.h"
+#include "board-8064.h"
 #include <mach/mpm.h>
 #include <mach/iommu_domains.h>
 #include <mach/msm_cache_dump.h>
@@ -2605,6 +2606,11 @@ struct msm_mpm_device_data apq8064_mpm_dev_data __initdata = {
 #define AP2BMDM_SOFT_RESET		3
 #define AP2BMDM_WAKEUP			29
 
+#define SGLTE2_QSC2AP_STATUS	51
+#define SGLTE2_QSC2AP_ERRFATAL	52
+#define SGLTE2_PM2QSC_SOFT_RESET	PM8921_GPIO_PM_TO_SYS(2)
+#define SGLTE2_PM2QSC_KEYPADPWR		PM8921_GPIO_PM_TO_SYS(21)
+
 static struct resource mdm_resources[] = {
 	{
 		.start	= MDM2AP_ERRFATAL,
@@ -2779,6 +2785,45 @@ static struct resource i2s_mdm_resources[] = {
 	},
 };
 
+static struct resource sglte2_qsc_resources[] = {
+	{
+		.start	= SGLTE2_QSC2AP_ERRFATAL,
+		.end	= SGLTE2_QSC2AP_ERRFATAL,
+		.name	= "MDM2AP_ERRFATAL",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2MDM_ERRFATAL,
+		.end	= AP2MDM_ERRFATAL,
+		.name	= "AP2MDM_ERRFATAL",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= SGLTE2_QSC2AP_STATUS,
+		.end	= SGLTE2_QSC2AP_STATUS,
+		.name	= "MDM2AP_STATUS",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2MDM_STATUS,
+		.end	= AP2MDM_STATUS,
+		.name	= "AP2MDM_STATUS",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= SGLTE2_PM2QSC_KEYPADPWR,
+		.end	= SGLTE2_PM2QSC_KEYPADPWR,
+		.name	= "AP2MDM_KPDPWR_N",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= SGLTE2_PM2QSC_SOFT_RESET,
+		.end	= SGLTE2_PM2QSC_SOFT_RESET,
+		.name	= "AP2MDM_SOFT_RESET",
+		.flags	= IORESOURCE_IO,
+	},
+};
+
 struct platform_device mdm_8064_device = {
 	.name		= "mdm2_modem",
 	.id		= -1,
@@ -2808,12 +2853,24 @@ struct platform_device i2s_mdm_8064_device = {
 };
 static int apq8064_LPM_latency = 1000; /* >100 usec for WFI */
 
-struct platform_device apq8064_cpu_idle_device = {
-	.name   = "msm_cpu_idle",
-	.id     = -1,
-	.dev = {
-		.platform_data = &apq8064_LPM_latency,
-	},
+struct platform_device sglte_mdm_8064_device = {
+	.name		= "mdm2_modem",
+	.id		= 0,
+	.num_resources	= ARRAY_SIZE(mdm_resources),
+	.resource	= mdm_resources,
+};
+
+struct platform_device sglte2_qsc_8064_device = {
+	.name		= "mdm2_modem",
+	.id		= 1,
+	.num_resources	= ARRAY_SIZE(sglte2_qsc_resources),
+	.resource	= sglte2_qsc_resources,
+};
+
+static struct msm_dcvs_sync_rule apq8064_dcvs_sync_rules[] = {
+	{1026000,	400000},
+	{384000,	200000},
+	{0,		128000},
 };
 
 static struct msm_dcvs_freq_entry apq8064_freq[] = {
