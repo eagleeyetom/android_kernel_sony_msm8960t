@@ -925,8 +925,6 @@ struct vfe32_frame_extra {
 #define VFE33_DMI_DATA_LO               0x000005A4
 #define VFE_AXI_CFG_MASK                0xFFFFFFFF
 
-#define VFE_AXI_CFG_MASK                0xFFFFFFFF
-
 #define VFE32_OUTPUT_MODE_PT			BIT(0)
 #define VFE32_OUTPUT_MODE_S			BIT(1)
 #define VFE32_OUTPUT_MODE_V			BIT(2)
