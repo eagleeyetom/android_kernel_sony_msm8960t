@@ -1055,6 +1055,7 @@ static long kgsl_ioctl_cmdstream_readtimestamp_ctxtid(struct kgsl_device_private
 	if (context == NULL)
 		return -EINVAL;
 
+
 	return _cmdstream_readtimestamp(dev_priv, context,
 			param->type, &param->timestamp);
 }
