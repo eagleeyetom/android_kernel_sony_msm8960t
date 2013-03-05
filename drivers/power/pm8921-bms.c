@@ -1068,8 +1068,10 @@ static int read_soc_params_raw(struct pm8921_bms_chip *chip,
 	}
 
 	/* stop faking 100% after an OCV event */
-	if (chip->ocv_reading_at_100 != raw->last_good_ocv_raw)
+	if (chip->ocv_reading_at_100 != raw->last_good_ocv_raw) {
 		chip->ocv_reading_at_100 = OCV_RAW_UNINITIALIZED;
+		chip->cc_reading_at_100 = 0;
+	}
 	pr_debug("0p625 = %duV\n", chip->xoadc_v0625);
 	pr_debug("1p25 = %duV\n", chip->xoadc_v125);
 	pr_debug("last_good_ocv_raw= 0x%x, last_good_ocv_uv= %duV\n",
@@ -2687,9 +2689,6 @@ void pm8921_bms_charging_end(int is_battery_full)
 
 		the_chip->last_ocv_uv = the_chip->max_voltage_uv;
 		raw.last_good_ocv_uv = the_chip->max_voltage_uv;
-		raw.cc = 0;
-		/* reset the cc in h/w */
-		reset_cc(the_chip);
 		the_chip->last_ocv_temp_decidegc = batt_temp;
 		/*
 		 * since we are treating this as an ocv event
