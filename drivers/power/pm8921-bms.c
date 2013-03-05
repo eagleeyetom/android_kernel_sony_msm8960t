@@ -912,7 +912,7 @@ static int pm8921_bms_start_ocv_updates(void)
 		pr_err("BMS driver has not been initialized yet!\n");
 		return -EINVAL;
 	}
-	pr_debug("stopping ocv updates\n");
+	pr_debug("starting ocv updates\n");
 	return pm_bms_masked_write(the_chip, BMS_TOLERANCES,
 			OCV_TOL_MASK, OCV_TOL_DEFAULT);
 }
@@ -3471,9 +3471,6 @@ static int __devinit pm8921_bms_probe(struct platform_device *pdev)
 	chip->disable_flat_portion_ocv = pdata->disable_flat_portion_ocv;
 	chip->ocv_dis_high_soc = pdata->ocv_dis_high_soc;
 	chip->ocv_dis_low_soc = pdata->ocv_dis_low_soc;
-
-	chip->alarm_low_mv = pdata->alarm_low_mv;
-	chip->alarm_high_mv = pdata->alarm_high_mv;
 
 	mutex_init(&chip->calib_mutex);
 	INIT_WORK(&chip->calib_hkadc_work, calibrate_hkadc_work);
