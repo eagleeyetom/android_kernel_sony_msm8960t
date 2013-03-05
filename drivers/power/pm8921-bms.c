@@ -912,7 +912,7 @@ static int pm8921_bms_start_ocv_updates(void)
 		pr_err("BMS driver has not been initialized yet!\n");
 		return -EINVAL;
 	}
-	pr_debug("starting ocv updates\n");
+	pr_debug("stopping ocv updates\n");
 	return pm_bms_masked_write(the_chip, BMS_TOLERANCES,
 			OCV_TOL_MASK, OCV_TOL_DEFAULT);
 }
@@ -930,10 +930,7 @@ static int reset_bms_for_test(void)
 	rc = pm8921_bms_get_simultaneous_battery_voltage_and_current(
 							&ibat_ua,
 							&vbat_uv);
-	/*
-	 * don't include rbatt and rbatt_capacitve since we expect this to
-	 * be used with a fake battery which does not have internal resistnaces
-	 */
+
 	ocv_est_uv = vbat_uv + (ibat_ua * the_chip->rconn_mohm) / 1000;
 	pr_debug("forcing ocv to be %d due to bms reset mode\n", ocv_est_uv);
 	the_chip->last_ocv_uv = ocv_est_uv;
