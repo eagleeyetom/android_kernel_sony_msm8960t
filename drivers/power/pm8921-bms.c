@@ -3489,6 +3489,9 @@ static int __devinit pm8921_bms_probe(struct platform_device *pdev)
 	chip->ocv_dis_high_soc = pdata->ocv_dis_high_soc;
 	chip->ocv_dis_low_soc = pdata->ocv_dis_low_soc;
 
+	chip->alarm_low_mv = pdata->alarm_low_mv;
+	chip->alarm_high_mv = pdata->alarm_high_mv;
+
 	mutex_init(&chip->calib_mutex);
 	INIT_WORK(&chip->calib_hkadc_work, calibrate_hkadc_work);
 
