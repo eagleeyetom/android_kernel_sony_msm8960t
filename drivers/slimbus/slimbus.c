@@ -722,6 +722,7 @@ int slim_assign_laddr(struct slim_controller *ctrl, const u8 *e_addr,
 {
 	int ret;
 	u8 i = 0;
+	bool exists = false;
 	struct slim_device *sbdev;
 	mutex_lock(&ctrl->m_ctrl);
 	/* already assigned */
@@ -766,10 +767,10 @@ int slim_assign_laddr(struct slim_controller *ctrl, const u8 *e_addr,
 	dev_dbg(&ctrl->dev, "setting slimbus l-addr:%x\n", *laddr);
 ret_assigned_laddr:
 	mutex_unlock(&ctrl->m_ctrl);
-	if (ret)
+	if (exists || ret)
 		return ret;
 
-	pr_info("slimbus laddr:0x%x, EAPC:0x%x:0x%x", i,
+	pr_info("slimbus:%d laddr:0x%x, EAPC:0x%x:0x%x", ctrl->nr, *laddr,
 				e_addr[1], e_addr[2]);
 	mutex_lock(&ctrl->m_ctrl);
 	list_for_each_entry(sbdev, &ctrl->devs, dev_list) {
