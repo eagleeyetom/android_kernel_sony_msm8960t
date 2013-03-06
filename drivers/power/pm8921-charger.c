@@ -4479,13 +4479,6 @@ static int __devinit pm8921_chg_hw_init(struct pm8921_chg_chip *chip)
 	/* forcing 19p2mhz before accessing any charger registers */
 	pm8921_chg_force_19p2mhz_clk(chip);
 
-	rc = pm_chg_set_irq_perm_user(chip, VBATDET_LOW_IN_BLOCK,
-		VBATDET_LOW_PERM_MARK, VBATDET_LOW_PERM_MARK);
-	if (rc) {
-		pr_err("Failed to set the permission rc=%d\n", rc);
-		return rc;
-	}
-
 	rc = pm_chg_masked_write(chip, SYS_CONFIG_2,
 					BOOT_DONE_BIT, BOOT_DONE_BIT);
 	if (rc) {
