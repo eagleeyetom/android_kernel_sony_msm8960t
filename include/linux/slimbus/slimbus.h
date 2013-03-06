@@ -505,9 +505,6 @@ enum slim_clk_state {
  *	send unicast message to this device with its logical address.
  * @allocbw: Controller can override default reconfiguration and channel
  *	scheduling algorithm.
- * @get_laddr: It is possible that controller needs to set fixed logical
- *	address table and get_laddr can be used in that case so that controller
- *	can do this assignment.
  * @wakeup: This function pointer implements controller-specific procedure
  *	to wake it up from clock-pause. Framework will call this to bring
  *	the controller out of clock pause.
@@ -554,8 +551,6 @@ struct slim_controller {
 				const u8 *ea, u8 elen, u8 laddr);
 	int			(*allocbw)(struct slim_device *sb,
 				int *subfrmc, int *clkgear);
-	int			(*get_laddr)(struct slim_controller *ctrl,
-				const u8 *ea, u8 elen, u8 *laddr);
 	int			(*wakeup)(struct slim_controller *ctrl);
 	int			(*config_port)(struct slim_controller *ctrl,
 				u8 port);
