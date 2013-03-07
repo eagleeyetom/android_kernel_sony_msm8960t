@@ -1,7 +1,7 @@
 /*
  * MobiCore client library device management.
  *
- * Device and Trustlet Session management Funtions.
+ * Device and Trustlet Session management Functions.
  *
  * <-- Copyright Giesecke & Devrient GmbH 2009 - 2012 -->
  *

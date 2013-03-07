@@ -803,6 +803,7 @@ enum mc_result mc_map(struct mc_session_handle *session_handle, void *buf,
 			},
 			{
 				session->session_id,
+				bulk_buf->handle,
 				(uint32_t)bulk_buf->phys_addr_wsm_l2,
 				(uint32_t)(bulk_buf->virt_addr) & 0xFFF,
 				bulk_buf->len
@@ -924,6 +925,7 @@ enum mc_result mc_unmap(struct mc_session_handle *session_handle, void *buf,
 				},
 				{
 					session->session_id,
+					handle,
 					(uint32_t)(map_info->secure_virt_addr)
 				}
 			};
