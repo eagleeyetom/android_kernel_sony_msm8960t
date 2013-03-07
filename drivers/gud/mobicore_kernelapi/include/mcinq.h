@@ -2,7 +2,7 @@
  * Notifications inform the MobiCore runtime environment that information is
  * pending in a WSM buffer.
  *
- * The Trustlet Connector (TLC) and the corresponding Trustlet also utilize
+ * The Trustlet Connector (TLC) and the corresponding trustlet also utilize
  * this buffer to notify each other about new data within the
  * Trustlet Connector Interface (TCI).
  *
@@ -59,7 +59,7 @@
 
 /*
  * MCP session ID is used when directly communicating with the MobiCore
- * (e.g. for starting and stopping of Trustlets).
+ * (e.g. for starting and stopping of trustlets).
  */
 #define SID_MCP		0
 /* Invalid session id is returned in case of an error. */
@@ -112,6 +112,6 @@ struct notification_queue {
 	struct notification_queue_header hdr;
 	/* Notification elements. */
 	struct notification notification[MIN_NQ_ELEM];
-};
+} ;
 
 #endif /* _MCINQ_H_ */

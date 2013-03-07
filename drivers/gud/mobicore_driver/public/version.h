@@ -1,6 +1,5 @@
 /*
  * <-- Copyright Giesecke & Devrient GmbH 2010-2012 -->
- * <-- Copyright Trustonic Limited 2013 -->
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,10 +26,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _MC_DRV_VERSION_H_
-#define _MC_DRV_VERSION_H_
+#ifndef _VERSION_H_
+#define _VERSION_H_
 
 #define MCDRVMODULEAPI_VERSION_MAJOR 1
 #define MCDRVMODULEAPI_VERSION_MINOR 1
 
-#endif /* _MC_DRV_VERSION_H_ */
+#endif /* _VERSION_H_ */

@@ -106,7 +106,7 @@ static int mcapi_process(struct sk_buff *skb, struct nlmsghdr *nlh)
 		c = mcapi_find_connection(seq);
 		if (!c) {
 			MCDRV_ERROR(mc_kapi,
-				    "Invalid incoming connection - seq=%u!",
+				    "Invalid incomming connection - seq=%u!",
 				    seq);
 			ret = -1;
 			break;
@@ -139,11 +139,9 @@ static void mcapi_callback(struct sk_buff *skb)
 
 static int __init mcapi_init(void)
 {
-#if defined MC_NETLINK_COMPAT || defined MC_NETLINK_COMPAT_V37
-	struct netlink_kernel_cfg cfg = {
-		.input  = mcapi_callback,
-	};
-#endif
+	dev_set_name(mc_kapi, "mcapi");
+
+	dev_info(mc_kapi, "Mobicore API module initialized!\n");
 
 	dev_set_name(mc_kapi, "mcapi");
 
@@ -160,10 +158,9 @@ static int __init mcapi_init(void)
 	/* start kernel thread */
 	mod_ctx->sk = netlink_kernel_create(&init_net, MC_DAEMON_NETLINK, 0,
 					    mcapi_callback, NULL, THIS_MODULE);
-#endif
 
 	if (!mod_ctx->sk) {
-		MCDRV_ERROR(mc_kapi, "register of receive handler failed");
+		MCDRV_ERROR(mc_kapi, "register of recieve handler failed");
 		return -EFAULT;
 	}
 
