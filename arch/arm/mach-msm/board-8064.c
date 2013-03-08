@@ -2556,17 +2556,6 @@ static struct platform_device *common_not_mpq_devices[] __initdata = {
 	&apq8064_device_qup_i2c_gsbi3,
 };
 
-static struct platform_device *common_mpq_devices[] __initdata = {
-	&mpq_cpudai_sec_i2s_rx,
-	&mpq_cpudai_mi2s_tx,
-};
-
-static struct platform_device *common_i2s_devices[] __initdata = {
-	&apq_cpudai_mi2s,
-	&apq_cpudai_i2s_rx,
-	&apq_cpudai_i2s_tx,
-};
-
 static struct platform_device *early_common_devices[] __initdata = {
 	&apq8064_device_acpuclk,
 	&apq8064_device_dmov,
