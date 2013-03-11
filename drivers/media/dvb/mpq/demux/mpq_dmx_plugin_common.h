@@ -602,9 +602,7 @@ int mpq_dmx_process_video_packet(
  * The function callbacks dmxdev after extraction of the pcr/stc
  * pair.
  */
-int mpq_dmx_process_pcr_packet(
-			struct dvb_demux_feed *feed,
-			const u8 *buf);
+int mpq_dmx_process_pcr_packet(struct dvb_demux_feed *feed, const u8 *buf);
 
 /**
  * mpq_dmx_init_hw_statistics -

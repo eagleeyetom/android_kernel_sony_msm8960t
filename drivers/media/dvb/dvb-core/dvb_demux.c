@@ -1171,17 +1171,22 @@ static int dmx_ts_set_secure_mode(struct dmx_ts_feed *feed,
 {
 	struct dvb_demux_feed *dvbdmxfeed = (struct dvb_demux_feed *)feed;
 	struct dvb_demux *dvbdmx = dvbdmxfeed->demux;
+	int ret = 0;
 
 	mutex_lock(&dvbdmx->mutex);
 
-	dvbdmxfeed->secure_mode = *secure_mode;
-
 	if ((dvbdmxfeed->state == DMX_STATE_GO) &&
-		dvbdmxfeed->demux->set_secure_mode)
-		dvbdmxfeed->demux->set_secure_mode(dvbdmxfeed, secure_mode);
+		dvbdmxfeed->demux->set_secure_mode) {
+		ret = dvbdmxfeed->demux->set_secure_mode(dvbdmxfeed,
+			secure_mode);
+		if (!ret)
+			dvbdmxfeed->secure_mode = *secure_mode;
+	} else {
+		dvbdmxfeed->secure_mode = *secure_mode;
+	}
 
 	mutex_unlock(&dvbdmx->mutex);
-	return 0;
+	return ret;
 }
 
 static int dmx_ts_set_secure_mode(struct dmx_ts_feed *feed,
