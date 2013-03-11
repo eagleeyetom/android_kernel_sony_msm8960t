@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -47,9 +47,6 @@ static DEFINE_SEMAPHORE(wcnss_power_on_lock);
 
 #define WCNSS_PMU_CFG_IRIS_XO_MODE         0x6
 #define WCNSS_PMU_CFG_IRIS_XO_MODE_48      (3 << 1)
-
-#define RIVA_SPARE_OUT              (msm_riva_base + 0x0b4)
-#define NVBIN_DLND_BIT              BIT(25)
 
 #define RIVA_SPARE_OUT              (msm_riva_base + 0x0b4)
 #define NVBIN_DLND_BIT              BIT(25)
@@ -165,16 +162,6 @@ static int configure_iris_xo(struct device *dev, bool use_48mhz_xo, int on)
 			writel_relaxed(reg, RIVA_SPARE_OUT);
 		}
 
-		/* power on thru SSR should not set NV bit,
-		 * during SSR, NV bin is downloaded by WLAN driver
-		 */
-		if (!wcnss_cold_boot_done()) {
-			pr_debug("wcnss: Indicate NV bin download\n");
-			reg = readl_relaxed(RIVA_SPARE_OUT);
-			reg |= NVBIN_DLND_BIT;
-			writel_relaxed(reg, RIVA_SPARE_OUT);
-		}
-
 		/* Enable IRIS XO */
 		rc = clk_prepare_enable(clk);
 		if (rc) {
@@ -214,15 +201,15 @@ static int configure_iris_xo(struct device *dev, bool use_48mhz_xo, int on)
 			wlan_clock = msm_xo_get(MSM_XO_TCXO_A2, id);
 			if (IS_ERR(wlan_clock)) {
 				rc = PTR_ERR(wlan_clock);
-				pr_err("Failed to get MSM_XO_TCXO_A2 voter (%d)\n",
-					rc);
+				pr_err("Failed to get MSM_XO_TCXO_A2 voter"
+							" (%d)\n", rc);
 				goto fail;
 			}
 
 			rc = msm_xo_mode_vote(wlan_clock, MSM_XO_MODE_ON);
 			if (rc < 0) {
-				pr_err("Configuring MSM_XO_MODE_ON failed (%d)\n",
-					rc);
+				pr_err("Configuring MSM_XO_MODE_ON failed"
+							" (%d)\n", rc);
 				goto msm_xo_vote_fail;
 			}
 		}
@@ -230,8 +217,8 @@ static int configure_iris_xo(struct device *dev, bool use_48mhz_xo, int on)
 		if (wlan_clock != NULL && !use_48mhz_xo) {
 			rc = msm_xo_mode_vote(wlan_clock, MSM_XO_MODE_OFF);
 			if (rc < 0)
-				pr_err("Configuring MSM_XO_MODE_OFF failed (%d)\n",
-					rc);
+				pr_err("Configuring MSM_XO_MODE_OFF failed"
+							" (%d)\n", rc);
 		}
 	}
 
@@ -489,11 +476,7 @@ int wcnss_req_power_on_lock(char *driver_name)
 	node = kmalloc(sizeof(struct host_driver), GFP_KERNEL);
 	if (!node)
 		goto err;
-	if (strlcpy(node->name, driver_name, sizeof(node->name))
-			>= sizeof(node->name)) {
-		kfree(node);
-		goto err;
-	}
+	strncpy(node->name, driver_name, sizeof(node->name));
 
 	mutex_lock(&list_lock);
 	/* Lock when the first request is added */

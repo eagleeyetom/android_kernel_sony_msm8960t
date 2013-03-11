@@ -2938,6 +2938,20 @@ struct platform_device sglte2_qsc_8064_device = {
 	.resource	= sglte2_qsc_resources,
 };
 
+struct platform_device sglte_mdm_8064_device = {
+	.name		= "mdm2_modem",
+	.id		= 0,
+	.num_resources	= ARRAY_SIZE(mdm_resources),
+	.resource	= mdm_resources,
+};
+
+struct platform_device sglte2_qsc_8064_device = {
+	.name		= "mdm2_modem",
+	.id		= 1,
+	.num_resources	= ARRAY_SIZE(sglte2_qsc_resources),
+	.resource	= sglte2_qsc_resources,
+};
+
 static struct msm_dcvs_sync_rule apq8064_dcvs_sync_rules[] = {
 	{1026000,	400000},
 	{384000,	200000},

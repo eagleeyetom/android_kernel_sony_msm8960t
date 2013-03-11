@@ -569,20 +569,6 @@ static int mc_lock_handle(struct mc_instance *instance, uint32_t handle)
 		/* Call the non locking variant! */
 		ret = __lock_buffer(instance, handle);
 	}
-	if (peer) {
-		task_lock(peer);
-		files = peer->files;
-		if (!files)
-			goto out;
-		for (fd = 0; fd < files_fdtable(files)->max_fds; fd++) {
-			fp = fcheck_files(files, fd);
-			if (!fp)
-				continue;
-			if (fp->private_data == instance) {
-				MCDRV_DBG(mcd, "Found owner!");
-				ret = true;
-				goto out;
-			}
 
 	mutex_unlock(&instance->lock);
 
@@ -992,8 +978,6 @@ static ssize_t mc_fd_read(struct file *file, char *buffer, size_t buffer_len,
 {
 	int ret = 0, ssiq_counter;
 	struct mc_instance *instance = get_instance(file);
-	int __user *uarg = (int __user *)arg;
-	int ret = -EINVAL;
 
 	if (WARN(!instance, "No instance data available"))
 		return -EFAULT;
