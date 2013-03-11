@@ -48,9 +48,6 @@ static DEFINE_SEMAPHORE(wcnss_power_on_lock);
 #define WCNSS_PMU_CFG_IRIS_XO_MODE         0x6
 #define WCNSS_PMU_CFG_IRIS_XO_MODE_48      (3 << 1)
 
-#define RIVA_SPARE_OUT              (msm_riva_base + 0x0b4)
-#define NVBIN_DLND_BIT              BIT(25)
-
 #define VREG_NULL_CONFIG            0x0000
 #define VREG_GET_REGULATOR_MASK     0x0001
 #define VREG_SET_VOLTAGE_MASK       0x0002
@@ -151,16 +148,6 @@ static int configure_iris_xo(struct device *dev, bool use_48mhz_xo, int on)
 			goto fail;
 		}
 		pmu_conf_reg = msm_wcnss_base + pmu_offset;
-
-		/* power on thru SSR should not set NV bit,
-		 * during SSR, NV bin is downloaded by WLAN driver
-		 */
-		if (!wcnss_cold_boot_done()) {
-			pr_debug("wcnss: Indicate NV bin download\n");
-			reg = readl_relaxed(RIVA_SPARE_OUT);
-			reg |= NVBIN_DLND_BIT;
-			writel_relaxed(reg, RIVA_SPARE_OUT);
-		}
 
 		/* Enable IRIS XO */
 		rc = clk_prepare_enable(clk);

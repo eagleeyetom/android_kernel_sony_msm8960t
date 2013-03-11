@@ -792,6 +792,23 @@ static int get_batt_temp(struct pm8921_bms_chip *chip, int *batt_temp)
 	return 0;
 }
 
+static int get_batt_temp(struct pm8921_bms_chip *chip, int *batt_temp)
+{
+	int rc;
+	struct pm8xxx_adc_chan_result result;
+
+	rc = pm8xxx_adc_read(chip->batt_temp_channel, &result);
+	if (rc) {
+		pr_err("error reading batt_temp_channel = %d, rc = %d\n",
+					chip->batt_temp_channel, rc);
+		return rc;
+	}
+	*batt_temp = result.physical;
+	pr_debug("batt_temp phy = %lld meas = 0x%llx\n", result.physical,
+						result.measurement);
+	return 0;
+}
+
 #define BMS_MODE_BIT	BIT(6)
 #define EN_VBAT_BIT	BIT(5)
 #define OVERRIDE_MODE_DELAY_MS	20

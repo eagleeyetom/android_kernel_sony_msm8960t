@@ -2679,7 +2679,7 @@ struct msm_mpm_device_data apq8064_mpm_dev_data __initdata = {
 
 #define SGLTE2_QSC2AP_STATUS	51
 #define SGLTE2_QSC2AP_ERRFATAL	52
-#define SGLTE2_PM2QSC_SOFT_RESET	PM8921_GPIO_PM_TO_SYS(23)
+#define SGLTE2_PM2QSC_SOFT_RESET	PM8921_GPIO_PM_TO_SYS(2)
 #define SGLTE2_PM2QSC_KEYPADPWR		PM8921_GPIO_PM_TO_SYS(21)
 
 static struct resource mdm_resources[] = {
@@ -2923,6 +2923,20 @@ struct platform_device i2s_mdm_8064_device = {
 	.resource	= i2s_mdm_resources,
 };
 static int apq8064_LPM_latency = 1000; /* >100 usec for WFI */
+
+struct platform_device sglte_mdm_8064_device = {
+	.name		= "mdm2_modem",
+	.id		= 0,
+	.num_resources	= ARRAY_SIZE(mdm_resources),
+	.resource	= mdm_resources,
+};
+
+struct platform_device sglte2_qsc_8064_device = {
+	.name		= "mdm2_modem",
+	.id		= 1,
+	.num_resources	= ARRAY_SIZE(sglte2_qsc_resources),
+	.resource	= sglte2_qsc_resources,
+};
 
 struct platform_device sglte_mdm_8064_device = {
 	.name		= "mdm2_modem",
