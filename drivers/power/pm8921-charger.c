@@ -1928,16 +1928,6 @@ static int get_prop_batt_current(struct pm8921_chg_chip *chip, int *curr)
 	return rc;
 }
 
-static int get_prop_batt_init_fcc(struct pm8921_chg_chip *chip)
-{
-	int rc;
-
-	rc = pm8921_bms_get_init_fcc();
-	if (rc < 0)
-		pr_err("unable to get batt init fcc rc = %d\n", rc);
-	return rc;
-}
-
 static int get_prop_batt_fcc(struct pm8921_chg_chip *chip)
 {
 	int rc;
@@ -2010,18 +2000,6 @@ static int get_prop_batt_temp(struct pm8921_chg_chip *chip, int *temp)
 		return 0;
 	}
 
-	if (chip->battery_less_hardware)
-		return 300;
-
-	if (chip->battery_less_hardware)
-		return 300;
-
-	if (chip->battery_less_hardware)
-		return 300;
-
-	if (chip->battery_less_hardware)
-		return 300;
-
 	rc = pm8xxx_adc_read(chip->batt_temp_channel, &result);
 	if (rc) {
 		pr_err("error reading adc channel = %d, rc = %d\n",
@@ -2037,123 +2015,6 @@ static int get_prop_batt_temp(struct pm8921_chg_chip *chip, int *temp)
 	*temp = (int)result.physical;
 
 	return rc;
-}
-
-static int calculate_scaled_soc(struct pm8921_chg_chip *chip)
-{
-	struct pm8921_soc_scaling *cs = &chip->soc_scale;
-	int soc = chip->soc[SOC_TRUE];
-	int status;
-
-	if (!cs->enable)
-		return soc;
-
-	if (!is_batfet_closed(chip) || charging_disabled & DIS_BIT_EOC_MASK)
-		if (cs->scaled_soc != 100) {
-			if (soc < chip->resume_charge_percent)
-				cs->override_full_to_not_chg = false;
-			else
-				cs->override_full_to_not_chg = true;
-		} else {
-			cs->override_full_to_not_chg = false;
-		}
-	else
-		cs->override_full_to_not_chg = false;
-
-	status = get_prop_batt_status(chip);
-
-	/*
-	 * As long as we are in fully charge mode scale the capacity
-	 * to show 100%.
-	 */
-	if (status == POWER_SUPPLY_STATUS_FULL) {
-		cs->soc_to_scale[0] = 100;
-		cs->soc_to_scale[1] =
-			max(soc, chip->resume_charge_percent);
-		pr_debug("Scale cap with %d/%d\n",
-				cs->soc_to_scale[0], cs->soc_to_scale[1]);
-	}
-
-	/* Calculates the scaled capacity. */
-	if (cs->soc_to_scale[0] != cs->soc_to_scale[1] &&
-		cs->soc_to_scale[1] > 0)
-		soc = min(100, DIV_ROUND_CLOSEST(chip->soc[SOC_TRUE] *
-							cs->soc_to_scale[0],
-							cs->soc_to_scale[1]));
-
-	if (status == POWER_SUPPLY_STATUS_CHARGING) {
-		if (soc < cs->disable_soc_level) {
-			cs->disable_soc_level = soc;
-			pr_debug("Cap to stop scale lowered %d%%\n",
-					cs->disable_soc_level);
-		} else if (chip->soc[SOC_TRUE] >= cs->disable_soc_level) {
-			pr_debug("Disabling scaled capacity\n");
-			cs->enable = false;
-			soc = chip->soc[SOC_TRUE];
-		} else {
-			pr_debug("Waiting in cap to level %d%%\n",
-					cs->disable_soc_level);
-			soc = cs->disable_soc_level;
-		}
-	}
-
-	cs->scaled_soc = soc;
-
-	return soc;
-}
-
-static void update_soc_scalers(struct pm8921_chg_chip *chip)
-{
-	struct pm8921_soc_scaling *cs = &chip->soc_scale;
-
-	if (!cs->enable)
-		return;
-
-	if (chip->bms_notify.is_charging) {
-		cs->disable_soc_level =	cs->scaled_soc;
-		pr_debug("Cap to stop scale at charge %d%%\n",
-				cs->disable_soc_level);
-	} else {
-		if (cs->scaled_soc != 100) {
-			cs->soc_to_scale[0] = cs->scaled_soc;
-			cs->soc_to_scale[1] = chip->soc[SOC_TRUE];
-		} else {
-			cs->soc_to_scale[0] = 100;
-			cs->soc_to_scale[1] =
-				max(chip->soc[SOC_TRUE],
-					chip->resume_charge_percent);
-		}
-
-		pr_debug("Cap to scale at discharge %d/%d\n",
-				cs->soc_to_scale[0], cs->soc_to_scale[1]);
-	}
-}
-
-static int update_soc(struct pm8921_chg_chip *chip)
-{
-	int soc = get_prop_batt_capacity(chip);
-	if (soc < 0)
-		return soc;
-
-	chip->soc[SOC_TRUE] = soc;
-
-	if (chip->soc_scale.active)
-		soc = calculate_scaled_soc(chip);
-
-	if (!chip->soc[SOC_TRUE])
-		chip->soc[SOC_SMOOTH] = 0;
-	else if (chip->soc[SOC_SMOOTH] == -EINVAL)
-		chip->soc[SOC_SMOOTH] = soc;
-	else if (soc > chip->soc[SOC_SMOOTH])
-		chip->soc[SOC_SMOOTH]++;
-	else if (soc < chip->soc[SOC_SMOOTH])
-		chip->soc[SOC_SMOOTH]--;
-
-	if (chip->soc_scale.active)
-		pr_debug("SOC=%d Scaled=%d Smooth=%d\n", chip->soc[SOC_TRUE],
-				soc, chip->soc[SOC_SMOOTH]);
-
-	return chip->soc[SOC_SMOOTH];
 }
 
 static int pm_batt_power_get_property(struct power_supply *psy,
