@@ -3447,6 +3447,23 @@ static struct msm_serial_hs_platform_data apq8064_uartdm_gsbi4_pdata = {
 static struct msm_serial_hs_platform_data apq8064_uartdm_gsbi4_pdata;
 #endif
 
+static void __init apq8064ab_update_retention_spm(void)
+{
+	int i;
+
+	/* Update the SPM sequences for krait retention on all cores */
+	for (i = 0; i < ARRAY_SIZE(msm_spm_data); i++) {
+		int j;
+		struct msm_spm_platform_data *pdata = &msm_spm_data[i];
+		for (j = 0; j < pdata->num_modes; j++) {
+			if (pdata->modes[j].cmd ==
+					spm_retention_cmd_sequence)
+				pdata->modes[j].cmd =
+				spm_retention_with_krait_v3_cmd_sequence;
+		}
+	}
+}
+
 static void __init apq8064_common_init(void)
 {
 	u32 platform_version = socinfo_get_platform_version();
