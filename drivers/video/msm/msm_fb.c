@@ -1138,6 +1138,26 @@ static void msm_fb_imageblit(struct fb_info *info, const struct fb_image *image)
 static int msm_fb_blank(int blank_mode, struct fb_info *info)
 {
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+
+	if (blank_mode == FB_BLANK_POWERDOWN) {
+		struct fb_event event;
+		event.info = info;
+		event.data = &blank_mode;
+		fb_notifier_call_chain(FB_EVENT_BLANK, &event);
+	}
+	msm_fb_pan_idle(mfd);
+	if (mfd->op_enable == 0) {
+		if (blank_mode == FB_BLANK_UNBLANK) {
+			mfd->suspend.panel_power_on = TRUE;
+			/* if unblank is called when system is in suspend,
+			do not unblank but send SUCCESS to hwc, so that hwc
+			keeps pushing frames and display comes up as soon
+			 as system is resumed */
+			return 0;
+		}
+		else
+			mfd->suspend.panel_power_on = FALSE;
+	}
 	return msm_fb_blank_sub(blank_mode, info, mfd->op_enable);
 }
 
@@ -1780,6 +1800,12 @@ static int msm_fb_open(struct fb_info *info, int user)
 	if (info->node == 0 && !(mfd->cont_splash_done)) {	/* primary */
 			mfd->ref_cnt++;
 			return 0;
+	}
+
+	if (mfd->op_enable == 0) {
+		/* if system is in suspend mode, do not unblank */
+		mfd->ref_cnt++;
+		return 0;
 	}
 
 	if (!mfd->ref_cnt) {
