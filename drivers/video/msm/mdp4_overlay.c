@@ -2968,6 +2968,9 @@ int mdp4_overlay_mdp_perf_req(struct msm_fb_data_type *mfd)
 	if (perf_req->use_ov_blt[0] || perf_req->use_ov_blt[1])
 		return ret;
 
+	if (perf_req->use_ov_blt[0] || perf_req->use_ov_blt[1])
+		return ret;
+
 	return 0;
 }
 
