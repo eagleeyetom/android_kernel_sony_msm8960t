@@ -704,42 +704,12 @@ static void __init msm8930_early_memory(void)
 {
 	reserve_info = &msm8930_reserve_info;
 }
-
-static char prim_panel_name[PANEL_NAME_MAX_LEN];
-static char ext_panel_name[PANEL_NAME_MAX_LEN];
-
-static int __init prim_display_setup(char *param)
-{
-	if (strnlen(param, PANEL_NAME_MAX_LEN))
-		strlcpy(prim_panel_name, param, PANEL_NAME_MAX_LEN);
-	return 0;
-}
-early_param("prim_display", prim_display_setup);
-
-static int __init ext_display_setup(char *param)
-{
-	if (strnlen(param, PANEL_NAME_MAX_LEN))
-		strlcpy(ext_panel_name, param, PANEL_NAME_MAX_LEN);
-	return 0;
-}
 early_param("ext_display", ext_display_setup);
 
 static void __init msm8930_reserve(void)
 {
 	msm8930_set_display_params(prim_panel_name, ext_panel_name);
 	msm_reserve();
-	if (msm8930_fmem_pdata.size) {
-#if defined(CONFIG_ION_MSM) && defined(CONFIG_MSM_MULTIMEDIA_USE_ION)
-		if (reserve_info->fixed_area_size) {
-			msm8930_fmem_pdata.phys =
-				reserve_info->fixed_area_start + MSM_MM_FW_SIZE;
-		pr_info("mm fw at %lx (fixed) size %x\n",
-			reserve_info->fixed_area_start, MSM_MM_FW_SIZE);
-		pr_info("fmem start %lx (fixed) size %lx\n",
-			msm8930_fmem_pdata.phys, msm8930_fmem_pdata.size);
-		}
-#endif
-	}
 }
 
 static void __init msm8930_allocate_memory_regions(void)
