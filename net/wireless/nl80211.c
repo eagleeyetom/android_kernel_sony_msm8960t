@@ -2651,9 +2651,18 @@ nl80211_sta_wme_policy[NL80211_STA_WME_MAX + 1] __read_mostly = {
 static int nl80211_set_station_tdls(struct genl_info *info,
 				    struct station_parameters *params)
 {
+	struct cfg80211_registered_device *rdev = info->user_ptr[0];
 	struct nlattr *tb[NL80211_STA_WME_MAX + 1];
 	struct nlattr *nla;
 	int err;
+
+	/* Can only set if TDLS ... */
+	if (!(rdev->wiphy.flags & WIPHY_FLAG_SUPPORTS_TDLS))
+		return -EOPNOTSUPP;
+
+	/* ... with external setup is supported */
+	if (!(rdev->wiphy.flags & WIPHY_FLAG_TDLS_EXTERNAL_SETUP))
+		return -EOPNOTSUPP;
 
 	/* Dummy STA entry gets updated once the peer capabilities are known */
 	if (info->attrs[NL80211_ATTR_HT_CAPABILITY])
@@ -2783,6 +2792,9 @@ static int nl80211_set_station(struct sk_buff *skb, struct genl_info *info)
 			return -EINVAL;
 		if (info->attrs[NL80211_ATTR_STA_EXT_CAPABILITY])
 			return -EINVAL;
+		if (info->attrs[NL80211_ATTR_HT_CAPABILITY] ||
+		    info->attrs[NL80211_ATTR_VHT_CAPABILITY])
+			return -EINVAL;
 
 		/* must be last in here for error handling */
 		params.vlan = get_vlan(info, rdev);
@@ -2835,6 +2847,9 @@ static int nl80211_set_station(struct sk_buff *skb, struct genl_info *info)
 		if (info->attrs[NL80211_ATTR_STA_CAPABILITY])
 			return -EINVAL;
 		if (info->attrs[NL80211_ATTR_STA_EXT_CAPABILITY])
+			return -EINVAL;
+		if (info->attrs[NL80211_ATTR_HT_CAPABILITY] ||
+		    info->attrs[NL80211_ATTR_VHT_CAPABILITY])
 			return -EINVAL;
 		/*
 		 * No special handling for TDLS here -- the userspace
