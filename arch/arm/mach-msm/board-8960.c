@@ -2697,7 +2697,7 @@ static struct platform_device fish_battery_device = {
 static struct platform_device battery_bcl_device = {
 	.name = "battery_current_limit",
 	.id = -1,
-};
+	};
 #endif
 
 static struct platform_device msm8960_device_ext_5v_vreg __devinitdata = {
