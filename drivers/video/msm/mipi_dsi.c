@@ -604,8 +604,6 @@ static int mipi_dsi_probe(struct platform_device *pdev)
 
 	pdev_list[pdev_list_cnt++] = pdev;
 
-	esc_byte_ratio = pinfo->mipi.esc_byte_ratio;
-
 	if (!mfd->cont_splash_done)
 		cont_splash_clk_ctrl(1);
 
