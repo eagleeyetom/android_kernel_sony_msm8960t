@@ -942,9 +942,6 @@ int __init sglte8930_init_gpiomux(void)
 	msm_gpiomux_install(sglte_8930_configs,
 			ARRAY_SIZE(sglte_8930_configs));
 
-	msm_gpiomux_install(msm8930_sglte_gsbi_configs,
-			ARRAY_SIZE(msm8930_sglte_gsbi_configs));
-
 	msm_gpiomux_install(msm8960_slimbus_config,
 			ARRAY_SIZE(msm8960_slimbus_config));
 
