@@ -78,8 +78,6 @@
 #define RMI4_I2C_LOAD_UA	10000
 #define RMI4_I2C_LPM_LOAD_UA	10
 
-#define RMI4_GPIO_SLEEP_LOW_US 10000
-#define RMI4_GPIO_WAIT_HIGH_MS 25
 
 static int synaptics_rmi4_i2c_read(struct synaptics_rmi4_data *rmi4_data,
 		unsigned short addr, unsigned char *data,
@@ -1732,7 +1730,6 @@ static int synaptics_rmi4_regulator_configure(struct synaptics_rmi4_data
 			}
 		}
 	}
-	return 0;
 
 err_set_vtg_i2c:
 	if (rmi4_data->board->i2c_pull_up)
@@ -2024,6 +2021,29 @@ static int __devinit synaptics_rmi4_probe(struct i2c_client *client,
 			rmi4_data->num_of_fingers);
 #endif
 
+	retval = synaptics_rmi4_regulator_configure(rmi4_data, true);
+	if (retval < 0) {
+		dev_err(&client->dev, "Failed to configure regulators\n");
+		goto err_input_device;
+	}
+
+	retval = synaptics_rmi4_power_on(rmi4_data, true);
+	if (retval < 0) {
+		dev_err(&client->dev, "Failed to power on\n");
+		goto err_input_device;
+	}
+
+	init_waitqueue_head(&rmi4_data->wait);
+	mutex_init(&(rmi4_data->rmi4_io_ctrl_mutex));
+
+	retval = synaptics_rmi4_query_device(rmi4_data);
+	if (retval < 0) {
+		dev_err(&client->dev,
+				"%s: Failed to query device\n",
+				__func__);
+		goto err_query_device;
+	}
+
 	i2c_set_clientdata(client, rmi4_data);
 
 	f1a = NULL;
@@ -2108,6 +2128,9 @@ err_enable_irq:
 	input_unregister_device(rmi4_data->input_dev);
 
 err_register_input:
+err_query_device:
+	synaptics_rmi4_power_on(rmi4_data, false);
+	synaptics_rmi4_regulator_configure(rmi4_data, false);
 	if (!list_empty(&rmi->support_fn_list)) {
 		list_for_each_entry(fhandler, &rmi->support_fn_list, link) {
 			if (fhandler->fn_number == SYNAPTICS_RMI4_F1A)
@@ -2117,17 +2140,6 @@ err_register_input:
 			kfree(fhandler);
 		}
 	}
-err_reset_gpio_dir:
-	if (gpio_is_valid(platform_data->reset_gpio))
-		gpio_free(platform_data->reset_gpio);
-err_irq_gpio_dir:
-	if (gpio_is_valid(platform_data->irq_gpio))
-		gpio_free(platform_data->irq_gpio);
-err_irq_gpio_req:
-	synaptics_rmi4_power_on(rmi4_data, false);
-err_power_device:
-	synaptics_rmi4_regulator_configure(rmi4_data, false);
-err_reg_configure:
 	input_free_device(rmi4_data->input_dev);
 	rmi4_data->input_dev = NULL;
 err_input_device:
@@ -2185,6 +2197,9 @@ static int __devexit synaptics_rmi4_remove(struct i2c_client *client)
 		gpio_free(rmi4_data->board->reset_gpio);
 	if (gpio_is_valid(rmi4_data->board->irq_gpio))
 		gpio_free(rmi4_data->board->irq_gpio);
+
+	synaptics_rmi4_power_on(rmi4_data, false);
+	synaptics_rmi4_regulator_configure(rmi4_data, false);
 
 	synaptics_rmi4_power_on(rmi4_data, false);
 	synaptics_rmi4_regulator_configure(rmi4_data, false);
