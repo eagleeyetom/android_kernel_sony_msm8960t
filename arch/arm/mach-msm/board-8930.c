@@ -2895,41 +2895,6 @@ static void __init msm8930ab_update_retention_spm(void)
 	}
 }
 
-static void __init msm8930ab_update_retention_spm(void)
-{
-	int i;
-
-	/* Update the SPM sequences for krait retention on all cores */
-	for (i = 0; i < ARRAY_SIZE(msm_spm_data); i++) {
-		int j;
-		struct msm_spm_platform_data *pdata = &msm_spm_data[i];
-		for (j = 0; j < pdata->num_modes; j++) {
-			if (pdata->modes[j].cmd ==
-					spm_retention_cmd_sequence)
-				pdata->modes[j].cmd =
-				spm_retention_with_krait_v3_cmd_sequence;
-		}
-	}
-}
-
-static void __init msm8930ab_update_retention_spm(void)
-{
-	int i;
-
-	/* Update the SPM sequences for krait retention on all cores */
-	for (i = 0; i < ARRAY_SIZE(msm_spm_data); i++) {
-		int j;
-		struct msm_spm_platform_data *pdata = &msm_spm_data[i];
-		for (j = 0; j < pdata->num_modes; j++) {
-			if (pdata->modes[j].cmd ==
-					spm_retention_cmd_sequence)
-				pdata->modes[j].cmd =
-				spm_retention_with_krait_v3_cmd_sequence;
-		}
-	}
-}
-
-#ifdef CONFIG_SERIAL_MSM_HS
 static int configure_uart_gpios(int on)
 {
 	int ret = 0, i;
