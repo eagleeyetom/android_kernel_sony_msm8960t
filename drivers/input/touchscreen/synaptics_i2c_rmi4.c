@@ -1732,6 +1732,7 @@ static int synaptics_rmi4_regulator_configure(struct synaptics_rmi4_data
 			}
 		}
 	}
+	return 0;
 
 err_set_vtg_i2c:
 	if (rmi4_data->board->i2c_pull_up)
@@ -2023,74 +2024,6 @@ static int __devinit synaptics_rmi4_probe(struct i2c_client *client,
 			rmi4_data->num_of_fingers);
 #endif
 
-	retval = synaptics_rmi4_regulator_configure(rmi4_data, true);
-	if (retval < 0) {
-		dev_err(&client->dev, "Failed to configure regulators\n");
-		goto err_reg_configure;
-	}
-
-	retval = synaptics_rmi4_power_on(rmi4_data, true);
-	if (retval < 0) {
-		dev_err(&client->dev, "Failed to power on\n");
-		goto err_power_device;
-	}
-
-	if (gpio_is_valid(platform_data->irq_gpio)) {
-		/* configure touchscreen irq gpio */
-		retval = gpio_request(platform_data->irq_gpio, "rmi4_irq_gpio");
-		if (retval) {
-			dev_err(&client->dev, "unable to request gpio [%d]\n",
-						platform_data->irq_gpio);
-			goto err_query_device;
-		}
-		retval = gpio_direction_input(platform_data->irq_gpio);
-		if (retval) {
-			dev_err(&client->dev,
-				"unable to set direction for gpio [%d]\n",
-				platform_data->irq_gpio);
-			goto err_irq_gpio_req;
-		}
-	} else {
-		dev_err(&client->dev, "irq gpio not provided\n");
-		goto err_query_device;
-	}
-
-	if (gpio_is_valid(platform_data->reset_gpio)) {
-		/* configure touchscreen reset out gpio */
-		retval = gpio_request(platform_data->reset_gpio,
-				"rmi4_reset_gpio");
-		if (retval) {
-			dev_err(&client->dev, "unable to request gpio [%d]\n",
-						platform_data->reset_gpio);
-			goto err_irq_gpio_req;
-		}
-
-		retval = gpio_direction_output(platform_data->reset_gpio, 1);
-		if (retval) {
-			dev_err(&client->dev,
-				"unable to set direction for gpio [%d]\n",
-				platform_data->reset_gpio);
-			goto err_reset_gpio_req;
-		}
-
-		gpio_set_value(platform_data->reset_gpio, 0);
-		usleep(RMI4_GPIO_SLEEP_LOW_US);
-		gpio_set_value(platform_data->reset_gpio, 1);
-		msleep(RMI4_GPIO_WAIT_HIGH_MS);
-	}
-
-
-	init_waitqueue_head(&rmi4_data->wait);
-	mutex_init(&(rmi4_data->rmi4_io_ctrl_mutex));
-
-	retval = synaptics_rmi4_query_device(rmi4_data);
-	if (retval < 0) {
-		dev_err(&client->dev,
-				"%s: Failed to query device\n",
-				__func__);
-		goto err_reset_gpio_req;
-	}
-
 	i2c_set_clientdata(client, rmi4_data);
 
 	f1a = NULL;
@@ -2184,13 +2117,13 @@ err_register_input:
 			kfree(fhandler);
 		}
 	}
-err_reset_gpio_req:
+err_reset_gpio_dir:
 	if (gpio_is_valid(platform_data->reset_gpio))
 		gpio_free(platform_data->reset_gpio);
-err_irq_gpio_req:
+err_irq_gpio_dir:
 	if (gpio_is_valid(platform_data->irq_gpio))
 		gpio_free(platform_data->irq_gpio);
-err_query_device:
+err_irq_gpio_req:
 	synaptics_rmi4_power_on(rmi4_data, false);
 err_power_device:
 	synaptics_rmi4_regulator_configure(rmi4_data, false);
