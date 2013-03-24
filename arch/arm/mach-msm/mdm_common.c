@@ -478,21 +478,6 @@ static long mdm_modem_ioctl(struct file *filp, unsigned int cmd,
 			   __func__, ret);
 		put_user(ret, (unsigned long __user *) arg);
 		break;
-#ifdef CONFIG_SONY_QSCFLASHING_UART4
-	case START_EDLOAD:
-		get_user(status, (unsigned long __user *) arg);
-		pr_info("START_EDLOAD received,status:%d\n", status);
-		if (status)
-			mdm_drv->mdm_ready = 0;
-		mdm_drv->mdm_edload_status = 1;
-		gpio_set_value(AP2MDM_EDLOAD, 1);
-		break;
-	case EDLOAD_DONE:
-		pr_info("%s: EDLOAD_DONE received\n", __func__);
-		if (mdm_drv->mdm_edload_status)
-			mdm_drv->mdm_edload_status = 0;
-		gpio_set_value(AP2MDM_EDLOAD, 0);
-		break;
 	case GET_HW_CONFIG:
 		pr_debug("get hardware config\n");
 		gpio_request(MDM_HW_ID_FIRST, "HW_ID_FIRST");
