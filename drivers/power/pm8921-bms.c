@@ -1895,6 +1895,8 @@ static void very_low_voltage_check(struct pm8921_bms_chip *chip,
 			pr_err("Unable to enable batt alarm\n");
 		wake_unlock(&chip->low_voltage_wake_lock);
 	}
+
+	return false;
 }
 
 static bool is_voltage_below_cutoff_window(struct pm8921_bms_chip *chip,
