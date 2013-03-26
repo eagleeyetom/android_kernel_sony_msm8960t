@@ -478,26 +478,6 @@ static long mdm_modem_ioctl(struct file *filp, unsigned int cmd,
 			   __func__, ret);
 		put_user(ret, (unsigned long __user *) arg);
 		break;
-	case GET_HW_CONFIG:
-		pr_debug("get hardware config\n");
-		gpio_request(MDM_HW_ID_FIRST, "HW_ID_FIRST");
-		gpio_request(MDM_HW_ID_SECOND, "HW_ID_SECOND");
-		gpio_request(MDM_HW_ID_THIRD, "HW_ID_THIRD");
-		gpio_request(MDM_HW_ID_FORTH, "HW_ID_FORTH");
-		if (gpio_get_value(MDM_HW_ID_FIRST) == 1)
-			hw_id = 1;
-		if (gpio_get_value(MDM_HW_ID_SECOND) == 1)
-			hw_id += 2;
-		if (gpio_get_value(MDM_HW_ID_THIRD) == 1)
-			hw_id += 4;
-		if (gpio_get_value(MDM_HW_ID_FORTH) == 1)
-			hw_id += 8;
-		put_user(hw_id, (unsigned long __user *) arg);
-		gpio_free(MDM_HW_ID_FIRST);
-		gpio_free(MDM_HW_ID_SECOND);
-		gpio_free(MDM_HW_ID_THIRD);
-		gpio_free(MDM_HW_ID_FORTH);
-		break;
 #endif
 	default:
 		pr_err("%s: invalid ioctl cmd = %d\n", __func__, _IOC_NR(cmd));
