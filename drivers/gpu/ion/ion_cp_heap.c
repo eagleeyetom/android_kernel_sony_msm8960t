@@ -480,6 +480,22 @@ void *ion_cp_heap_map_kernel(struct ion_heap *heap, struct ion_buffer *buffer)
 		if (cp_heap->reusable) {
 			ret_value = ion_map_fmem_buffer(buffer, cp_heap->base,
 				cp_heap->reserved_vrange, buffer->flags);
+		} else if (cp_heap->cma) {
+			int npages = PAGE_ALIGN(buffer->size) / PAGE_SIZE;
+			struct page **pages = vmalloc(
+						sizeof(struct page *) * npages);
+			int i;
+			pgprot_t pgprot;
+
+			if (!pages) {
+				mutex_unlock(&cp_heap->lock);
+				return ERR_PTR(-ENOMEM);
+			}
+
+			if (ION_IS_CACHED(buffer->flags))
+				pgprot = PAGE_KERNEL;
+			else
+				pgprot = pgprot_writecombine(PAGE_KERNEL);
 
 		} else {
 			if (ION_IS_CACHED(buffer->flags))
