@@ -1189,29 +1189,6 @@ static int dmx_ts_set_secure_mode(struct dmx_ts_feed *feed,
 	return ret;
 }
 
-static int dmx_ts_set_secure_mode(struct dmx_ts_feed *feed,
-				struct dmx_secure_mode *secure_mode)
-{
-	struct dvb_demux_feed *dvbdmxfeed = (struct dvb_demux_feed *)feed;
-	struct dvb_demux *dvbdmx = dvbdmxfeed->demux;
-	int ret = 0;
-
-	mutex_lock(&dvbdmx->mutex);
-
-	if ((dvbdmxfeed->state == DMX_STATE_GO) &&
-		dvbdmxfeed->demux->set_secure_mode) {
-		ret = dvbdmxfeed->demux->set_secure_mode(dvbdmxfeed,
-			secure_mode);
-		if (!ret)
-			dvbdmxfeed->secure_mode = *secure_mode;
-	} else {
-		dvbdmxfeed->secure_mode = *secure_mode;
-	}
-
-	mutex_unlock(&dvbdmx->mutex);
-	return ret;
-}
-
 static int dmx_ts_set_indexing_params(
 	struct dmx_ts_feed *ts_feed,
 	struct dmx_indexing_video_params *params)
