@@ -3584,6 +3584,7 @@ static void __init apq8064_cdp_init(void)
 		mpq8064_device_uartdm_gsbi6.dev.platform_data =
 					&mpq8064_gsbi6_uartdm_pdata;
 #endif
+		platform_device_register(&mpq8064_device_uartdm_gsbi6);
 	}
 
 	if (machine_is_apq8064_cdp() || machine_is_apq8064_liquid())
