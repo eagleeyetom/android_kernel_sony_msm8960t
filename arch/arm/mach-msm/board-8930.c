@@ -2895,6 +2895,7 @@ static void __init msm8930ab_update_retention_spm(void)
 	}
 }
 
+#ifdef CONFIG_SERIAL_MSM_HS
 static int configure_uart_gpios(int on)
 {
 	int ret = 0, i;
