@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -46,7 +46,8 @@ do { \
 #define DDL_MSG_ERROR(x...)
 #endif
 
-
+#define DDL_MSG_INFO(x...)   printk(KERN_INFO x)
+#define DDL_MSG_ERROR(x...)  printk(KERN_INFO x)
 #define DDL_MSG_FATAL(x...)  printk(KERN_INFO x)
 
 #define DDL_ALIGN_SIZE(sz, guard_bytes, align_mask) \
