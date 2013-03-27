@@ -641,10 +641,20 @@ static void *__alloc_from_contiguous(struct device *dev, size_t size,
 		__dma_remap(page, size, prot, no_kernel_mapping);
 		ptr = page_address(page);
 	} else {
-		ptr = __dma_alloc_remap(page, size, GFP_KERNEL, prot, caller);
-		if (!ptr) {
-			dma_release_from_contiguous(dev, page, count);
-			return NULL;
+		if (no_kernel_mapping) {
+			/*
+			 * Something non-NULL needs to be returned here. Give
+			 * back a dummy address that is unmapped to catch
+			 * clients trying to use the address incorrectly
+			 */
+			ptr = (void *)NO_KERNEL_MAPPING_DUMMY;
+		} else {
+			ptr = __dma_alloc_remap(page, size, GFP_KERNEL, prot,
+						caller);
+			if (!ptr) {
+				dma_release_from_contiguous(dev, page, count);
+				return NULL;
+			}
 		}
 	}
 	*ret_page = page;
@@ -657,7 +667,7 @@ static void __free_from_contiguous(struct device *dev, struct page *page,
 	if (!PageHighMem(page))
 		__dma_remap(page, size, pgprot_kernel, false);
 	else
-		__dma_free_remap(cpu_addr, size);
+		__dma_free_remap(cpu_addr, size, true);
 	dma_release_from_contiguous(dev, page, size >> PAGE_SHIFT);
 }
 
