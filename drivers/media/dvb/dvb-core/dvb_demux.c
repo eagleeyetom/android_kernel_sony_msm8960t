@@ -1828,14 +1828,14 @@ int dvb_dmx_init(struct dvb_demux *dvbdemux)
 	if (dvbdemux->debugfs_demux_dir != NULL) {
 		debugfs_create_u32(
 			"total_processing_time",
-			S_IRUGO|S_IWUGO,
-			dvbdemux->debugfs_demux_dir,
+			S_IRUGO | S_IWUSR | S_IWGRP,
+			dvbdemux->dmx.debugfs_demux_dir,
 			&dvbdemux->total_process_time);
 
 		debugfs_create_u32(
 			"total_crc_time",
-			S_IRUGO|S_IWUGO,
-			dvbdemux->debugfs_demux_dir,
+			S_IRUGO | S_IWUSR | S_IWGRP,
+			dvbdemux->dmx.debugfs_demux_dir,
 			&dvbdemux->total_crc_time);
 	}
 
