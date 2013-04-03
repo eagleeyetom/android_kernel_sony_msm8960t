@@ -2557,7 +2557,8 @@ static int report_state_of_charge(struct pm8921_bms_chip *chip)
 
 	/* last_soc < soc  ... scale and catch up */
 	if (last_soc != -EINVAL && last_soc < soc && soc != 100)
-		soc = scale_soc_while_chg(chip, delta_time_us, soc, last_soc);
+			soc = scale_soc_while_chg(chip, delta_time_us,
+							soc, last_soc);
 
 	/* restrict soc to 1% change */
 	if (last_soc != -EINVAL) {
@@ -3146,7 +3147,6 @@ enum bms_request_operation {
 	STOP_OCV,
 	START_OCV,
 	SET_OCV,
-	BATT_PRESENT,
 };
 
 static int test_batt_temp = 5;
@@ -3391,8 +3391,6 @@ static void create_debugfs_entries(struct pm8921_bms_chip *chip)
 				(void *)START_OCV, &calc_fops);
 	debugfs_create_file("set_ocv", 0644, chip->dent,
 				(void *)SET_OCV, &calc_fops);
-	debugfs_create_file("batt_present", 0644, chip->dent,
-				(void *)BATT_PRESENT, &calc_fops);
 
 	debugfs_create_file("simultaneous", 0644, chip->dent,
 			(void *)GET_VBAT_VSENSE_SIMULTANEOUS, &calc_fops);
