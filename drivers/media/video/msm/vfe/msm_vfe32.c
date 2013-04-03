@@ -6191,6 +6191,10 @@ void axi_start(struct msm_cam_media_controller *pmctl,
 		else if(axi_ctrl->share_ctrl->dual_enabled)
 			msm_camio_bus_scale_cfg(
 				pmctl->sdata->pdata->cam_bus_scale_table,
+				S_PREVIEW);
+		else if(axi_ctrl->share_ctrl->dual_enabled)
+			msm_camio_bus_scale_cfg(
+				pmctl->sdata->pdata->cam_bus_scale_table,
 				S_DUAL);
 		break;
 	case AXI_CMD_CAPTURE:
@@ -6218,6 +6222,10 @@ void axi_start(struct msm_cam_media_controller *pmctl,
 		return;
 	case AXI_CMD_ZSL:
 		if (!axi_ctrl->share_ctrl->dual_enabled)
+			msm_camio_bus_scale_cfg(
+				pmctl->sdata->pdata->cam_bus_scale_table,
+				S_ZSL);
+		else if(axi_ctrl->share_ctrl->dual_enabled)
 			msm_camio_bus_scale_cfg(
 				pmctl->sdata->pdata->cam_bus_scale_table,
 				S_ZSL);
