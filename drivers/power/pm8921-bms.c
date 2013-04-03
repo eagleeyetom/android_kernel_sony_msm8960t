@@ -3147,6 +3147,7 @@ enum bms_request_operation {
 	STOP_OCV,
 	START_OCV,
 	SET_OCV,
+	BATT_PRESENT,
 };
 
 static int test_batt_temp = 5;
@@ -3391,6 +3392,8 @@ static void create_debugfs_entries(struct pm8921_bms_chip *chip)
 				(void *)START_OCV, &calc_fops);
 	debugfs_create_file("set_ocv", 0644, chip->dent,
 				(void *)SET_OCV, &calc_fops);
+	debugfs_create_file("batt_present", 0644, chip->dent,
+				(void *)BATT_PRESENT, &calc_fops);
 
 	debugfs_create_file("simultaneous", 0644, chip->dent,
 			(void *)GET_VBAT_VSENSE_SIMULTANEOUS, &calc_fops);
