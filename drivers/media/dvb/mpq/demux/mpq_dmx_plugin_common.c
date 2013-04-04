@@ -1182,6 +1182,8 @@ int mpq_dmx_init_video_feed(struct dvb_demux_feed *feed)
 
 	MPQ_DVB_DBG_PRINT("%s: cookie=%d\n", __func__, cookie);
 
+	MPQ_DVB_DBG_PRINT("%s: cookie=%d\n", __func__, cookie);
+
 	if (cookie < 0) {
 		MPQ_DVB_ERR_PRINT("%s: invalid cookie parameter\n", __func__);
 		return -EINVAL;
