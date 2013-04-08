@@ -1797,8 +1797,42 @@ static int dvb_dmxdev_ts_event_cb(struct dmx_ts_feed *feed,
 		return 0;
 	}
 
-	if ((dmxdevfilter->params.pes.output == DMX_OUT_DECODER) ||
-		(buffer->error)) {
+	if (dmx_data_ready->status == DMX_OK_DECODER_BUF) {
+		event.type = DMX_EVENT_NEW_ES_DATA;
+		event.params.es_data.buf_handle = dmx_data_ready->buf.handle;
+		event.params.es_data.cookie = dmx_data_ready->buf.cookie;
+		event.params.es_data.offset = dmx_data_ready->buf.offset;
+		event.params.es_data.data_len = dmx_data_ready->buf.len;
+		event.params.es_data.pts_valid = dmx_data_ready->buf.pts_exists;
+		event.params.es_data.pts = dmx_data_ready->buf.pts;
+		event.params.es_data.dts_valid = dmx_data_ready->buf.dts_exists;
+		event.params.es_data.dts = dmx_data_ready->buf.dts;
+		event.params.es_data.transport_error_indicator_counter =
+				dmx_data_ready->buf.tei_counter;
+		event.params.es_data.continuity_error_counter =
+				dmx_data_ready->buf.cont_err_counter;
+		event.params.es_data.ts_packets_num =
+				dmx_data_ready->buf.ts_packets_num;
+		event.params.es_data.ts_dropped_bytes =
+				dmx_data_ready->buf.ts_dropped_bytes;
+		dvb_dmxdev_add_event(events, &event);
+		spin_unlock(&dmxdevfilter->dev->lock);
+		wake_up_all(&buffer->queue);
+		return 0;
+	}
+
+	if (dmxdevfilter->params.pes.output == DMX_OUT_DECODER) {
+		if (DMX_OVERRUN_ERROR == dmx_data_ready->status) {
+			dprintk("dmxdev: buffer overflow\n");
+			event.type = DMX_EVENT_BUFFER_OVERFLOW;
+			dvb_dmxdev_add_event(&dmxdevfilter->events, &event);
+		}
+		spin_unlock(&dmxdevfilter->dev->lock);
+		wake_up_all(&buffer->queue);
+		return 0;
+	}
+
+	if (buffer->error) {
 		spin_unlock(&dmxdevfilter->dev->lock);
 		wake_up_all(&buffer->queue);
 		return 0;
