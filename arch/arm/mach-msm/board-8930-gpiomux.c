@@ -139,6 +139,12 @@ static struct gpiomux_setting audio_useuro_switch = {
 	.pull = GPIOMUX_PULL_NONE,
 };
 
+static struct gpiomux_setting audio_useuro_switch = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
 #if defined(CONFIG_KS8851) || defined(CONFIG_KS8851_MODULE)
 static struct gpiomux_setting gpio_eth_suspend_1_cfg = {
 	.pull = GPIOMUX_PULL_DOWN,

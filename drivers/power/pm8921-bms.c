@@ -185,6 +185,9 @@ struct pm8921_bms_chip {
 	int			low_ocv_correction_limit_uv;
 	int			hold_soc_est;
 	int			prev_vbat_batt_terminal_uv;
+	int			vbatt_cutoff_count;
+	int			low_voltage_detect;
+	int			vbatt_cutoff_retries;
 };
 
 /*

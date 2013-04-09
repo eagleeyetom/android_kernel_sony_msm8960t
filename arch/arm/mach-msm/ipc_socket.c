@@ -172,12 +172,6 @@ static int msm_ipc_router_create(struct net *net,
 	struct msm_ipc_port *port_ptr;
 	void *pil;
 
-	if (!check_permissions()) {
-		pr_err("%s: %s Do not have permissions\n",
-			__func__, current->comm);
-		return -EPERM;
-	}
-
 	if (unlikely(protocol != 0)) {
 		pr_err("%s: Protocol not supported\n", __func__);
 		return -EPROTONOSUPPORT;
@@ -438,6 +432,8 @@ static int msm_ipc_router_ioctl(struct socket *sock,
 
 	case IPC_ROUTER_IOCTL_CONFIG_SEC_RULES:
 		ret = msm_ipc_config_sec_rules((void *)arg);
+		if (ret != -EPERM)
+			port_ptr->type = IRSC_PORT;
 		break;
 
 	default:
