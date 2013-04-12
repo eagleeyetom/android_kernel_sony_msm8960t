@@ -633,7 +633,8 @@ static inline void dvb_dmx_swfilter_packet_type(struct dvb_demux_feed *feed,
 	((f)->feed.ts.is_filtering) &&					\
 	(((f)->ts_type & (TS_PACKET | TS_DEMUX)) == TS_PACKET))
 
-static void dvb_dmx_swfilter_packet(struct dvb_demux *demux, const u8 *buf)
+static void dvb_dmx_swfilter_one_packet(struct dvb_demux *demux, const u8 *buf,
+				const u8 timestamp[TIMESTAMP_LEN])
 {
 	struct dvb_demux_feed *feed;
 	u16 pid = ts_pid(buf);
@@ -713,6 +714,15 @@ static void dvb_dmx_swfilter_packet(struct dvb_demux *demux, const u8 *buf)
 	}
 }
 
+void dvb_dmx_swfilter_packet(struct dvb_demux *demux, const u8 *buf,
+				const u8 timestamp[TIMESTAMP_LEN])
+{
+	spin_lock(&demux->lock);
+	dvb_dmx_swfilter_one_packet(demux, buf, timestamp);
+	spin_unlock(&demux->lock);
+}
+EXPORT_SYMBOL(dvb_dmx_swfilter_packet);
+
 void dvb_dmx_swfilter_section_packets(struct dvb_demux *demux, const u8 *buf,
 			      size_t count)
 {
@@ -774,7 +784,7 @@ void dvb_dmx_swfilter_packets(struct dvb_demux *demux, const u8 *buf,
 
 	while (count--) {
 		if (buf[0] == 0x47)
-			dvb_dmx_swfilter_packet(demux, buf);
+			dvb_dmx_swfilter_one_packet(demux, buf, timestamp);
 		buf += 188;
 	}
 
@@ -843,9 +853,11 @@ static inline void _dvb_dmx_swfilter(struct dvb_demux *demux, const u8 *buf,
 		if (pktsize == 192 &&
 			leadingbytes &&
 			demux->tsbuf[leadingbytes] == 0x47)  /* double check */
-			dvb_dmx_swfilter_packet(demux, demux->tsbuf+4);
+			dvb_dmx_swfilter_one_packet(demux,
+				demux->tsbuf + TIMESTAMP_LEN, timestamp);
 		else if (demux->tsbuf[0] == 0x47) /* double check */
-			dvb_dmx_swfilter_packet(demux, demux->tsbuf);
+			dvb_dmx_swfilter_one_packet(demux,
+					demux->tsbuf, timestamp);
 		demux->tsbufp = 0;
 		p += j;
 	}
@@ -869,10 +881,18 @@ static inline void _dvb_dmx_swfilter(struct dvb_demux *demux, const u8 *buf,
 			q = demux->tsbuf;
 		}
 
-		if (pktsize == 192 && leadingbytes)
-			q = &buf[p+leadingbytes];
+		if (pktsize == 192) {
+			if (leadingbytes) {
+				q = &buf[p+leadingbytes];
+				memcpy(timestamp, &buf[p], TIMESTAMP_LEN);
+			} else {
+				memcpy(timestamp, &buf[p+188], TIMESTAMP_LEN);
+			}
+		} else {
+			memset(timestamp, 0, TIMESTAMP_LEN);
+		}
 
-		dvb_dmx_swfilter_packet(demux, q);
+		dvb_dmx_swfilter_one_packet(demux, q, timestamp);
 		p += pktsize;
 	}
 
