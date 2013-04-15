@@ -3200,9 +3200,6 @@ int mdp4_overlay_mdp_perf_req(struct msm_fb_data_type *mfd)
 	if (perf_req->use_ov_blt[0] || perf_req->use_ov_blt[1])
 		return ret;
 
-	if (perf_req->use_ov_blt[0] || perf_req->use_ov_blt[1])
-		return ret;
-
 	return 0;
 }
 
@@ -3480,7 +3477,7 @@ int mdp4_overlay_get(struct fb_info *info, struct mdp_overlay *req)
 int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
 {
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
-	int ret = 0, mixer;
+	int ret, mixer;
 	struct mdp4_overlay_pipe *pipe;
 
 	if (mfd == NULL) {
@@ -3542,14 +3539,10 @@ int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
 	}
 
 	mdp4_overlay_mdp_pipe_req(pipe, mfd);
-	ret = mdp4_overlay_mdp_perf_req(mfd);
-
-	if (ret)
-		pr_err("%s: blt mode should not be enabled\n", __func__);
 
 	mutex_unlock(&mfd->dma->ov_mutex);
 
-	return ret;
+	return 0;
 }
 
 int mdp4_overlay_unset_mixer(int mixer)
