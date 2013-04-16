@@ -710,7 +710,61 @@ static ssize_t hdmi_common_rda_hdmi_primary(struct device *dev,
 	return ret;
 }
 
-static DEVICE_ATTR(video_mode, S_IRUGO | S_IWUGO,
+static ssize_t hdmi_common_rda_audio_data_block(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	int adb_size = external_common_state->adb_size;
+	int adb_count = 1;
+	ssize_t ret = sizeof(adb_count) + sizeof(adb_size) + adb_size;
+	char *data = buf;
+
+	if (ret > PAGE_SIZE) {
+		DEV_DBG("%s: Insufficient buffer size\n", __func__);
+		return 0;
+	}
+
+	/* Currently only extracting one audio data block */
+	memcpy(data, &adb_count, sizeof(adb_count));
+	data += sizeof(adb_count);
+	memcpy(data, &adb_size, sizeof(adb_size));
+	data += sizeof(adb_size);
+	memcpy(data, external_common_state->audio_data_block,
+			external_common_state->adb_size);
+
+	print_hex_dump(KERN_DEBUG, "AUDIO DATA BLOCK: ", DUMP_PREFIX_NONE,
+			32, 8, buf, ret, false);
+
+	return ret;
+}
+
+static ssize_t hdmi_common_rda_spkr_alloc_data_block(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	int sadb_size = external_common_state->sadb_size;
+	int sadb_count = 1;
+	ssize_t ret = sizeof(sadb_count) + sizeof(sadb_size) + sadb_size;
+	char *data = buf;
+
+	if (ret > PAGE_SIZE) {
+		DEV_DBG("%s: Insufficient buffer size\n", __func__);
+		return 0;
+	}
+
+	/* Currently only extracting one speaker allocation data block */
+	memcpy(data, &sadb_count, sizeof(sadb_count));
+	data += sizeof(sadb_count);
+	memcpy(data, &sadb_size, sizeof(sadb_size));
+	data += sizeof(sadb_size);
+	memcpy(data, external_common_state->spkr_alloc_data_block,
+			external_common_state->sadb_size);
+
+	print_hex_dump(KERN_DEBUG, "SPKR ALLOC DATA BLOCK: ", DUMP_PREFIX_NONE,
+			32, 8, buf, ret, false);
+
+	return ret;
+}
+
+static DEVICE_ATTR(video_mode, S_IRUGO | S_IWUSR | S_IWGRP,
 	external_common_rda_video_mode, external_common_wta_video_mode);
 static DEVICE_ATTR(video_mode_str, S_IRUGO, external_common_rda_video_mode_str,
 	NULL);
@@ -718,7 +772,7 @@ static DEVICE_ATTR(connected, S_IRUGO, external_common_rda_connected, NULL);
 static DEVICE_ATTR(hdmi_mode, S_IRUGO, external_common_rda_hdmi_mode, NULL);
 #ifdef CONFIG_FB_MSM_HDMI_COMMON
 static DEVICE_ATTR(edid_modes, S_IRUGO, hdmi_common_rda_edid_modes, NULL);
-static DEVICE_ATTR(hpd, S_IRUGO | S_IWUGO, hdmi_common_rda_hpd,
+static DEVICE_ATTR(hpd, S_IRUGO | S_IWUSR | S_IWGRP, hdmi_common_rda_hpd,
 	hdmi_common_wta_hpd);
 static DEVICE_ATTR(hdcp, S_IRUGO, hdmi_common_rda_hdcp, NULL);
 static DEVICE_ATTR(pa, S_IRUGO,
@@ -736,8 +790,8 @@ static DEVICE_ATTR(3d_present, S_IRUGO, hdmi_common_rda_3d_present, NULL);
 static DEVICE_ATTR(hdcp_present, S_IRUGO, hdmi_common_rda_hdcp_present, NULL);
 #endif
 #ifdef CONFIG_FB_MSM_HDMI_3D
-static DEVICE_ATTR(format_3d, S_IRUGO | S_IWUGO, hdmi_3d_rda_format_3d,
-	hdmi_3d_wta_format_3d);
+static DEVICE_ATTR(format_3d, S_IRUGO | S_IWUSR | S_IWGRP,
+	hdmi_3d_rda_format_3d, hdmi_3d_wta_format_3d);
 #endif
 static DEVICE_ATTR(hdmi_primary, S_IRUGO, hdmi_common_rda_hdmi_primary, NULL);
 
