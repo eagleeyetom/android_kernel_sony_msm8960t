@@ -1353,6 +1353,93 @@ static long venc_set_max_perf_level(struct video_client_ctx *client_ctx,
 err_set_perf_level:
 	return rc;
 }
+
+static long venc_set_avc_delimiter(struct video_client_ctx *client_ctx,
+			__s32 flag)
+{
+	struct vcd_property_hdr vcd_property_hdr;
+	struct vcd_property_avc_delimiter_enable delimiter_flag;
+	if (!client_ctx)
+		return -EINVAL;
+
+	vcd_property_hdr.prop_id = VCD_I_ENABLE_DELIMITER_FLAG;
+	vcd_property_hdr.sz =
+			sizeof(struct vcd_property_avc_delimiter_enable);
+	delimiter_flag.avc_delimiter_enable_flag = flag;
+	return vcd_set_property(client_ctx->vcd_handle,
+				&vcd_property_hdr, &delimiter_flag);
+}
+
+static long venc_get_avc_delimiter(struct video_client_ctx *client_ctx,
+			__s32 *flag)
+{
+	struct vcd_property_hdr vcd_property_hdr;
+	struct vcd_property_avc_delimiter_enable delimiter_flag;
+	int rc = 0;
+
+	if (!client_ctx || !flag)
+		return -EINVAL;
+
+	vcd_property_hdr.prop_id = VCD_I_ENABLE_DELIMITER_FLAG;
+	vcd_property_hdr.sz =
+			sizeof(struct vcd_property_avc_delimiter_enable);
+	rc = vcd_get_property(client_ctx->vcd_handle,
+				&vcd_property_hdr, &delimiter_flag);
+
+	if (rc < 0) {
+		WFD_MSG_ERR("Failed getting property for delimiter");
+		return rc;
+	}
+
+	*flag = delimiter_flag.avc_delimiter_enable_flag;
+	return rc;
+}
+
+static long venc_set_vui_timing_info(struct video_client_ctx *client_ctx,
+			struct venc_inst *inst, __s32 flag)
+{
+	struct vcd_property_hdr vcd_property_hdr;
+	struct vcd_property_vui_timing_info_enable vui_timing_info_enable;
+
+	if (!client_ctx)
+		return -EINVAL;
+	if (inst->framerate_mode == VENC_MODE_VFR) {
+		WFD_MSG_INFO("VUI timing info not suported in VFR mode ");
+		return -EINVAL;
+	}
+	vcd_property_hdr.prop_id = VCD_I_ENABLE_VUI_TIMING_INFO;
+	vcd_property_hdr.sz =
+			sizeof(struct vcd_property_vui_timing_info_enable);
+	vui_timing_info_enable.vui_timing_info = flag;
+	return vcd_set_property(client_ctx->vcd_handle,
+				&vcd_property_hdr, &vui_timing_info_enable);
+}
+
+static long venc_get_vui_timing_info(struct video_client_ctx *client_ctx,
+			__s32 *flag)
+{
+	struct vcd_property_hdr vcd_property_hdr;
+	struct vcd_property_vui_timing_info_enable vui_timing_info_enable;
+	int rc = 0;
+
+	if (!client_ctx || !flag)
+		return -EINVAL;
+
+	vcd_property_hdr.prop_id = VCD_I_ENABLE_VUI_TIMING_INFO;
+	vcd_property_hdr.sz =
+			sizeof(struct vcd_property_vui_timing_info_enable);
+	rc = vcd_get_property(client_ctx->vcd_handle,
+				&vcd_property_hdr, &vui_timing_info_enable);
+
+	if (rc < 0) {
+		WFD_MSG_ERR("Failed getting property for VUI timing info");
+		return rc;
+	}
+
+	*flag = vui_timing_info_enable.vui_timing_info;
+	return rc;
+}
+
 static long venc_set_header_mode(struct video_client_ctx *client_ctx,
 		__s32 mode)
 {
