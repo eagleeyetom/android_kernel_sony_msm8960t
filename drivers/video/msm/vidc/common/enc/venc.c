@@ -1630,6 +1630,49 @@ static long vid_enc_ioctl(struct file *file,
 		}
 		break;
 	}
+	case VEN_IOCTL_SET_SPS_PPS_FOR_IDR:
+	{
+		struct vcd_property_hdr vcd_property_hdr;
+		struct vcd_property_sps_pps_for_idr_enable idr_enable;
+		u32 vcd_status = VCD_ERR_FAIL;
+		u32 enabled = 1;
+
+		if (copy_from_user(&venc_msg, arg, sizeof(venc_msg)))
+			return -EFAULT;
+
+		vcd_property_hdr.prop_id = VCD_I_ENABLE_SPS_PPS_FOR_IDR;
+		vcd_property_hdr.sz = sizeof(idr_enable);
+
+		if (copy_from_user(&enabled, venc_msg.in, sizeof(u32)))
+			return -EFAULT;
+
+		idr_enable.sps_pps_for_idr_enable_flag = enabled;
+		vcd_status = vcd_set_property(client_ctx->vcd_handle,
+				&vcd_property_hdr, &idr_enable);
+		if (vcd_status) {
+			pr_err("Setting sps/pps per IDR failed");
+			return -EIO;
+		}
+		break;
+	}
+	case VEN_IOCTL_GET_PERF_LEVEL:
+	{
+		u32 curr_perf_level;
+		if (copy_from_user(&venc_msg, arg, sizeof(venc_msg)))
+			return -EFAULT;
+		result = vid_enc_get_curr_perf_level(client_ctx,
+			&curr_perf_level);
+		if (!result) {
+			ERR("get_curr_perf_level failed!!");
+			return -EIO;
+		}
+		DBG("VEN_IOCTL_GET_PERF_LEVEL %u\n",
+			curr_perf_level);
+		if (copy_to_user(venc_msg.out,
+			&curr_perf_level, sizeof(u32)))
+			return -EFAULT;
+		break;
+	}
 	case VEN_IOCTL_SET_AC_PREDICTION:
 	case VEN_IOCTL_GET_AC_PREDICTION:
 	case VEN_IOCTL_SET_RVLC:
