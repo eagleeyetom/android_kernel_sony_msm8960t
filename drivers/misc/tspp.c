@@ -54,7 +54,12 @@
 #define TSPP_NUM_PRIORITIES            16
 #define TSPP_NUM_KEYS                  8
 #define INVALID_CHANNEL                0xFFFFFFFF
-#define TSPP_SPS_DESCRIPTOR_COUNT      128
+
+/*
+ * BAM descriptor FIFO size (in number of descriptors).
+ * Max number of descriptors allowed by SPS which is 8K-1.
+ */
+#define TSPP_SPS_DESCRIPTOR_COUNT      (8 * 1024 - 1)
 #define TSPP_PACKET_LENGTH             188
 #define TSPP_MIN_BUFFER_SIZE           (TSPP_PACKET_LENGTH)
 
@@ -1944,6 +1949,19 @@ int tspp_allocate_buffers(u32 dev, u32 channel_id,	u32 count,
 		pr_err("tspp_alloc: can't find device %i", dev);
 		return -ENODEV;
 	}
+
+	if (count < MIN_ACCEPTABLE_BUFFER_COUNT) {
+		pr_err("%s: tspp requires a minimum of %i buffers\n",
+			__func__, MIN_ACCEPTABLE_BUFFER_COUNT);
+		return -EINVAL;
+	}
+
+	if (count > TSPP_NUM_BUFFERS) {
+		pr_err("%s: tspp requires a maximum of %i buffers\n",
+			__func__, TSPP_NUM_BUFFERS);
+		return -EINVAL;
+	}
+
 	channel = &pdev->channels[channel_id];
 
 	/* allow buffer allocation only if there was no previous buffer
