@@ -1063,8 +1063,14 @@ void diag_dci_exit(void)
 		diag_smd_destructor(&driver->smd_dci[i]);
 
 	platform_driver_unregister(&msm_diag_dci_driver);
-	kfree(driver->dci_tbl);
-	kfree(driver->dci_notify_tbl);
+
+	if (driver->dci_client_tbl) {
+		for (i = 0; i < MAX_DCI_CLIENTS; i++)
+			kfree(driver->dci_client_tbl[i].dci_data);
+	}
+
+	kfree(driver->req_tracking_tbl);
+	kfree(driver->dci_client_tbl);
 	kfree(driver->apps_dci_buf);
 	mutex_destroy(&driver->dci_mutex);
 	mutex_destroy(&dci_log_mask_mutex);
