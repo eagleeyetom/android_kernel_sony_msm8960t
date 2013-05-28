@@ -65,14 +65,6 @@ struct mem_entry_stats {
 		mem_entry_max_show), \
 }
 
-
-/*
- * One page allocation for a guard region to protect against over-zealous
- * GPU pre-fetch
- */
-
-static struct page *kgsl_guard_page;
-
 /**
  * Given a kobj, find the process structure attached to it
  */
@@ -350,10 +342,6 @@ static void kgsl_page_alloc_free(struct kgsl_memdesc *memdesc)
 	struct scatterlist *sg;
 	int sglen = memdesc->sglen;
 
-	/* Don't free the guard page if it was used */
-	if (memdesc->priv & KGSL_MEMDESC_GUARD_PAGE)
-		sglen--;
-
 	kgsl_driver.stats.page_alloc -= memdesc->size;
 
 	if (memdesc->hostptr) {
@@ -389,10 +377,6 @@ static int kgsl_page_alloc_map_kernel(struct kgsl_memdesc *memdesc)
 		struct scatterlist *sg;
 		int sglen = memdesc->sglen;
 		int i;
-
-		/* Don't map the guard page if it exists */
-		if (memdesc->priv & KGSL_MEMDESC_GUARD_PAGE)
-			sglen--;
 
 		/* create a list of pages to call vmap */
 		pages = vmalloc(sglen * sizeof(struct page *));
@@ -543,14 +527,6 @@ _kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 
 	sglen_alloc = PAGE_ALIGN(size) >> PAGE_SHIFT;
 
-	/*
-	 * Add guard page to the end of the allocation when the
-	 * IOMMU is in use.
-	 */
-
-	if (kgsl_mmu_get_mmutype() == KGSL_MMU_TYPE_IOMMU)
-		sglen++;
-
 	memdesc->size = size;
 	memdesc->pagetable = pagetable;
 	memdesc->ops = &kgsl_page_alloc_ops;
@@ -645,25 +621,7 @@ _kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 		sg_set_page(&memdesc->sg[i], pages[i], PAGE_SIZE, 0);
 	}
 
-	/* ADd the guard page to the end of the sglist */
-
-	if (kgsl_mmu_get_mmutype() == KGSL_MMU_TYPE_IOMMU) {
-		/*
-		 * It doesn't matter if we use GFP_ZERO here, this never
-		 * gets mapped, and we only allocate it once in the life
-		 * of the system
-		 */
-
-		if (kgsl_guard_page == NULL)
-			kgsl_guard_page = alloc_page(GFP_KERNEL | __GFP_ZERO |
-				__GFP_HIGHMEM);
-
-		if (kgsl_guard_page != NULL) {
-			sg_set_page(&memdesc->sg[sglen - 1], kgsl_guard_page,
-				PAGE_SIZE, 0);
-			memdesc->priv |= KGSL_MEMDESC_GUARD_PAGE;
-		}
-	}
+	memdesc->sglen = sglen;
 
 	/*
 	 * All memory that goes to the user has to be zeroed out before it gets
