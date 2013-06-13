@@ -1,4 +1,5 @@
 /* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -427,7 +428,10 @@ static int msm_server_control(struct msm_cam_server_dev *server_dev,
 			break;
 		D("%s: wait_event interrupted by signal, remain_count = %d",
 			__func__, wait_count);
-	} while (1);
+#if defined(CONFIG_SONY_CAM_V4L2)
+		msleep(20);
+#endif
+	} while (wait_count > 0);
 	D("Waiting is over for config status\n");
 	if (list_empty_careful(&queue->list)) {
 		if (!rc)
@@ -456,15 +460,16 @@ static int msm_server_control(struct msm_cam_server_dev *server_dev,
 	kfree(ctrlcmd);
 	free_qcmd(rcmd);
 	D("%s: rc %d\n", __func__, rc);
-	/* rc is the time elapsed.
-	 * This means that the communication with the daemon itself was
-	 * successful(irrespective of the handling of the ctrlcmd).
-	 * So, just reset the rc to 0 to indicate success.
-	 * Its upto the caller to parse the ctrlcmd to check the status. We
-	 * dont need to parse it here. */
-	if (rc >= 0)
-		rc = 0;
-
+	/* rc is the time elapsed. */
+	if (rc >= 0) {
+		/* TODO: Refactor msm_ctrl_cmd::status field */
+		if (out->status == 0)
+			rc = -1;
+		else if (out->status == 1 || out->status == 4)
+			rc = 0;
+		else
+			rc = -EINVAL;
+	}
 	return rc;
 
 ctrlcmd_alloc_fail:
@@ -832,9 +837,14 @@ int msm_server_proc_ctrl_cmd(struct msm_cam_v4l2_device *pcam,
 			rc = -EINVAL;
 			goto end;
 		}
-		tmp_cmd.status = cmd_ptr->status = ctrlcmd.status;
+
+#if defined(CONFIG_SONY_CAM_V4L2)
 		if (copy_to_user((void __user *)ioctl_ptr->ioctl_ptr,
 			(void *)cmd_ptr, cmd_len)) {
+#else
+		if (copy_to_user((void __user *)ioctl_ptr->ioctl_ptr,
+			(void *)&tmp_cmd, cmd_len)) {
+#endif
 			pr_err("%s: copy_to_user failed in cpy, size=%d\n",
 				__func__, cmd_len);
 			rc = -EINVAL;
@@ -1068,37 +1078,8 @@ int msm_server_v4l2_unsubscribe_event(struct v4l2_fh *fh,
 			struct v4l2_event_subscription *sub)
 {
 	int rc = 0;
-	struct v4l2_event ev;
 
 	D("%s: fh = 0x%x\n", __func__, (u32)fh);
-
-	/* Undequeue all pending events and free associated
-	 * msm_isp_event_ctrl  */
-	while (v4l2_event_pending(fh)) {
-		struct msm_isp_event_ctrl *isp_event;
-		rc = v4l2_event_dequeue(fh, &ev, O_NONBLOCK);
-		if (rc) {
-			pr_err("%s: v4l2_event_dequeue failed %d",
-						__func__, rc);
-			break;
-		}
-		isp_event = (struct msm_isp_event_ctrl *)
-			(*((uint32_t *)ev.u.data));
-		if (isp_event) {
-			if (ev.type == (V4L2_EVENT_PRIVATE_START +
-						MSM_CAM_RESP_STAT_EVT_MSG)) {
-				if (isp_event->isp_data.isp_msg.len != 0 &&
-				isp_event->isp_data.isp_msg.data != NULL) {
-					kfree(isp_event->isp_data.isp_msg.data);
-					isp_event->isp_data.isp_msg.len = 0;
-					isp_event->isp_data.isp_msg.data = NULL;
-				}
-				kfree(isp_event);
-				*((uint32_t *)ev.u.data) = 0;
-			}
-		}
-	}
-
 	rc = v4l2_event_unsubscribe(fh, sub);
 	D("%s: rc = %d\n", __func__, rc);
 	return rc;
@@ -1468,7 +1449,7 @@ static int msm_close_server(struct file *fp)
 			}
 		}
 		sub.type = V4L2_EVENT_ALL;
-		v4l2_event_unsubscribe(
+		msm_server_v4l2_unsubscribe_event(
 			&g_server_dev.server_command_queue.eventHandle, &sub);
 		mutex_unlock(&g_server_dev.server_lock);
 	}
@@ -1661,7 +1642,7 @@ static const struct v4l2_file_operations msm_fops_server = {
 
 static const struct v4l2_ioctl_ops msm_ioctl_ops_server = {
 	.vidioc_subscribe_event = msm_server_v4l2_subscribe_event,
-	.vidioc_unsubscribe_event = v4l2_event_unsubscribe,
+	.vidioc_unsubscribe_event = msm_server_v4l2_unsubscribe_event,
 	.vidioc_default = msm_ioctl_server,
 };
 
@@ -1766,10 +1747,6 @@ static void msm_cam_server_subdev_notify(struct v4l2_subdev *sd,
 	case NOTIFY_VFE_MSG_COMP_STATS:
 	case NOTIFY_VFE_BUF_EVT:
 		p_mctl = msm_cam_server_get_mctl(mctl_handle);
-		if (p_mctl == NULL) {
-			pr_err("%s: Not find p_mctl instance!\n", __func__);
-			return;
-		}
 		if (p_mctl && p_mctl->isp_notify && p_mctl->vfe_sdev)
 			rc = p_mctl->isp_notify(p_mctl,
 				p_mctl->vfe_sdev, notification, arg);
@@ -2989,8 +2966,6 @@ static long msm_ioctl_config(struct file *fp, unsigned int cmd,
 						break;
 					}
 					kfree(k_msg_value);
-					k_isp_event->isp_data.isp_msg.len = 0;
-					k_isp_event->isp_data.isp_msg.data = 0;
 					k_msg_value = NULL;
 				}
 			}
@@ -3004,7 +2979,6 @@ static long msm_ioctl_config(struct file *fp, unsigned int cmd,
 			break;
 		}
 		kfree(k_isp_event);
-		*((uint32_t *)ev.u.data) = 0;
 		k_isp_event = NULL;
 
 		/* Copy the v4l2_event structure back to the user*/
@@ -3063,7 +3037,9 @@ static long msm_ioctl_config(struct file *fp, unsigned int cmd,
 
 static int msm_close_config(struct inode *node, struct file *f)
 {
+	struct v4l2_event ev;
 	struct v4l2_event_subscription sub;
+	struct msm_isp_event_ctrl *isp_event;
 	struct msm_cam_config_dev *config_cam = f->private_data;
 
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
@@ -3074,6 +3050,20 @@ static int msm_close_config(struct inode *node, struct file *f)
 	msm_server_v4l2_unsubscribe_event(
 		&config_cam->config_stat_event_queue.eventHandle,
 		&sub);
+	while (v4l2_event_pending(
+		&config_cam->config_stat_event_queue.eventHandle)) {
+		v4l2_event_dequeue(
+			&config_cam->config_stat_event_queue.eventHandle,
+			&ev, O_NONBLOCK);
+		isp_event = (struct msm_isp_event_ctrl *)
+			(*((uint32_t *)ev.u.data));
+		if (isp_event) {
+			if (isp_event->isp_data.isp_msg.len != 0 &&
+				isp_event->isp_data.isp_msg.data != NULL)
+				kfree(isp_event->isp_data.isp_msg.data);
+			kfree(isp_event);
+		}
+	}
 	return 0;
 }
 

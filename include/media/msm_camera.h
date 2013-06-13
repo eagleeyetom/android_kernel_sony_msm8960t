@@ -1,4 +1,5 @@
-/* Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -288,12 +289,12 @@ struct msm_mctl_post_proc_cmd {
 
 #define MSM_MAX_CAMERA_CONFIGS 2
 
-#define PP_SNAP  BIT(0)
-#define PP_RAW_SNAP BIT(1)
-#define PP_PREV  BIT(2)
-#define PP_THUMB BIT(3)
-#define PP_RDI   BIT(4)
-#define PP_MASK		(PP_SNAP|PP_RAW_SNAP|PP_PREV|PP_THUMB)
+#define PP_SNAP  0x01
+#define PP_RAW_SNAP ((0x01)<<1)
+#define PP_PREV  ((0x01)<<2)
+#define PP_THUMB ((0x01)<<3)
+#define PP_RDI_PREV ((0x01)<<4)
+#define PP_MASK		(PP_SNAP|PP_RAW_SNAP|PP_PREV|PP_THUMB|PP_RDI_PREV)
 
 #define MSM_CAM_CTRL_CMD_DONE  0
 #define MSM_CAM_SENSOR_VFE_CMD 1
@@ -994,10 +995,14 @@ struct msm_snapshot_pp_status {
 #define CFG_CONFIG_VREG_ARRAY         52
 #define CFG_CONFIG_CLK_ARRAY          53
 #define CFG_GPIO_OP                   54
-#define CFG_SET_VISION_MODE           55
-#define CFG_SET_VISION_AE             56
-#define CFG_HDR_UPDATE                57
-#define CFG_MAX                       58
+/* extension begin */
+#define CFG_SET_GPIO_CTRL		55
+#define CFG_SET_WRITE_CMD		56
+#define CFG_SET_READ_CMD		57
+#define CFG_GET_ROM			58
+/* extension end */
+#define CFG_MAX                       59
+
 
 #define MOVE_NEAR	0
 #define MOVE_FAR	1
@@ -1013,6 +1018,20 @@ struct msm_snapshot_pp_status {
 #define SENSOR_FULL_SIZE		1
 #define SENSOR_QVGA_SIZE		2
 #define SENSOR_INVALID_SIZE		3
+
+#define CAMERA_EFFECT_OFF		0
+#define CAMERA_EFFECT_MONO		1
+#define CAMERA_EFFECT_NEGATIVE		2
+#define CAMERA_EFFECT_SOLARIZE		3
+#define CAMERA_EFFECT_SEPIA		4
+#define CAMERA_EFFECT_POSTERIZE		5
+#define CAMERA_EFFECT_WHITEBOARD	6
+#define CAMERA_EFFECT_BLACKBOARD	7
+#define CAMERA_EFFECT_AQUA		8
+#define CAMERA_EFFECT_EMBOSS		9
+#define CAMERA_EFFECT_SKETCH		10
+#define CAMERA_EFFECT_NEON		11
+#define CAMERA_EFFECT_MAX		12
 
 /* QRD */
 #define CAMERA_EFFECT_BW		10
@@ -1200,8 +1219,6 @@ struct sensor_pict_fps {
 struct exp_gain_cfg {
 	uint16_t gain;
 	uint32_t line;
-	int32_t luma_avg;
-	uint16_t fgain;
 };
 
 struct focus_cfg {
@@ -1310,17 +1327,6 @@ struct msm_sensor_output_reg_addr_t {
 	uint16_t y_output;
 	uint16_t line_length_pclk;
 	uint16_t frame_length_lines;
-};
-
-enum sensor_hdr_update_t {
-	SENSOR_HDR_UPDATE_AWB,
-	SENSOR_HDR_UPDATE_LSC,
-};
-
-struct sensor_hdr_update_parm_t {
-	enum sensor_hdr_update_t type;
-	uint16_t awb_gain_r, awb_gain_b;
-	uint8_t lsc_table[504];
 };
 
 struct sensor_driver_params_type {
@@ -1669,7 +1675,6 @@ struct sensor_cfg_data {
 		struct sensor_output_info_t output_info;
 		struct msm_eeprom_data_t eeprom_data;
 		struct csi_lane_params_t csi_lane_params;
-		struct sensor_hdr_update_parm_t hdr_update_parm;
 		/* QRD */
 		uint16_t antibanding;
 		uint8_t contrast;
@@ -1684,8 +1689,11 @@ struct sensor_cfg_data {
 		int is_autoflash;
 		struct mirror_flip mirror_flip;
 		void *setting;
-		int32_t vision_mode_enable;
-		int32_t vision_ae;
+		/* extension begin */
+		struct sensor_gpio_ctrl gpio_ctrl;
+		struct sensor_i2c_io i2c_io;
+		struct sensor_rom_in rom_in;
+		/* extension end */
 	} cfg;
 };
 

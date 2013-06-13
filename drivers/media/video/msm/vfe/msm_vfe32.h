@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -541,12 +542,6 @@ enum VFE_YUV_INPUT_COSITING_MODE {
 
 #define VFE32_GAMMA_NUM_ENTRIES  64
 
-#define VFE32_GAMMA_CH0_G_POS    0
-
-#define VFE32_GAMMA_CH1_B_POS    32
-
-#define VFE32_GAMMA_CH2_R_POS    64
-
 #define VFE32_LA_TABLE_LENGTH    64
 
 #define VFE32_LINEARIZATON_TABLE_LENGTH    36
@@ -929,6 +924,7 @@ struct vfe32_frame_extra {
 
 #define VFE33_DMI_DATA_HI               0x000005A0
 #define VFE33_DMI_DATA_LO               0x000005A4
+
 #define VFE_AXI_CFG_MASK                0xFFFFFFFF
 
 #define VFE32_OUTPUT_MODE_PT			BIT(0)
@@ -1000,9 +996,6 @@ struct vfe_share_ctrl_t {
 	atomic_t rdi0_update_ack_pending;
 	atomic_t rdi1_update_ack_pending;
 	atomic_t rdi2_update_ack_pending;
-
-	uint8_t stream_error;
-	uint32_t rdi_comp;
 
 };
 
