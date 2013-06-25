@@ -573,10 +573,7 @@ struct mdp_buf_sync {
 	uint32_t acq_fen_fd_cnt;
 	int *acq_fen_fd;
 	int *rel_fen_fd;
-};
-
-struct mdp_blend_cfg {
-	uint32_t is_premultiplied;
+	int *retire_fen_fd;
 };
 
 struct msmfb_metadata {
