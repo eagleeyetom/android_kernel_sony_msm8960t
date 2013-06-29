@@ -1,6 +1,6 @@
 /* drivers/media/video/msm/sensors/sony_camera_v4l2.c
  *
- * Copyright (C) 2012 Sony Mobile Communications AB.
+ * Copyright (C) 2012-2013 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2, as
@@ -121,6 +121,12 @@ static int sony_util_vreg_set(struct msm_sensor_ctrl_t *s_ctrl,
 			vreg = data->cam_vdig;
 		} else {
 			vreg = regulator_get(dev, "cam_vdig");
+			if (IS_ERR(vreg)) {
+				LOGE("could not get cam_vdig, vreg = %ld\n",
+					PTR_ERR(vreg));
+				rc = -ENODEV;
+				goto exit;
+			}
 			data->cam_vdig = vreg;
 		}
 	} else if (cmd == SONY_CAM_VIO) {
@@ -128,6 +134,12 @@ static int sony_util_vreg_set(struct msm_sensor_ctrl_t *s_ctrl,
 			vreg = data->cam_vio;
 		} else {
 			vreg = regulator_get(dev, "cam_vio");
+			if (IS_ERR(vreg)) {
+				LOGE("could not get cam_vio, vreg = %ld\n",
+					PTR_ERR(vreg));
+				rc = -ENODEV;
+				goto exit;
+			}
 			data->cam_vio = vreg;
 		}
 	} else if (cmd == SONY_CAM_VANA) {
@@ -135,6 +147,12 @@ static int sony_util_vreg_set(struct msm_sensor_ctrl_t *s_ctrl,
 			vreg = data->cam_vana;
 		} else {
 			vreg = regulator_get(dev, "cam_vana");
+			if (IS_ERR(vreg)) {
+				LOGE("could not get cam_vana, vreg = %ld\n",
+					PTR_ERR(vreg));
+				rc = -ENODEV;
+				goto exit;
+			}
 			data->cam_vana = vreg;
 		}
 	} else if (cmd == SONY_CAM_VAF) {
@@ -142,6 +160,12 @@ static int sony_util_vreg_set(struct msm_sensor_ctrl_t *s_ctrl,
 			vreg = data->cam_vaf;
 		} else {
 			vreg = regulator_get(dev, "cam_vaf");
+			if (IS_ERR(vreg)) {
+				LOGE("could not get cam_vaf, vreg = %ld\n",
+					PTR_ERR(vreg));
+				rc = -ENODEV;
+				goto exit;
+			}
 			data->cam_vaf = vreg;
 		}
 	} else {
@@ -269,8 +293,10 @@ static int sony_cam_i2c_read(struct msm_sensor_ctrl_t *s_ctrl,
 	rc = i2c_transfer(s_ctrl->sensor_i2c_client->client->adapter,
 				pmsg, msglen);
 	if (rc < 0 || rc != msglen) {
+		LOGE("slave:0x%04x, addr:0x%04x, type:0x%02x, len:0x%02x\n",
+				slave_addr, addr, type, len);
+		LOGE("i2c transfer failed (%d)\n", rc);
 		rc = -EIO;
-		LOGE("i2c transfer failed\n");
 		goto exit;
 	}
 	memcpy(data, camera_data[id].buf, len);
@@ -285,6 +311,7 @@ static int sony_cam_i2c_write(struct msm_sensor_ctrl_t *s_ctrl,
 	uint16_t len, uint8_t *data)
 {
 	int rc;
+	uint16_t i;
 	uint16_t id = sony_util_get_context(s_ctrl);
 
 	struct i2c_msg msgs[] = {
@@ -330,11 +357,16 @@ static int sony_cam_i2c_write(struct msm_sensor_ctrl_t *s_ctrl,
 	rc = i2c_transfer(s_ctrl->sensor_i2c_client->client->adapter,
 			pmsg, msglen);
 	if (rc < 0 || rc != msglen) {
+		LOGE("slave:0x%04x,addr:0x%04x,type:0x%02x,len:0x%02x,data:",
+				slave_addr, addr, type, len);
+		for (i = 0; i < len; i++)
+			LOGE("0x%02x ", *(data + i));
+		LOGE("\ni2c transfer failed (%d)\n", rc);
 		rc = -EIO;
-		LOGE("i2c transfer failed\n");
 		goto exit;
 	}
 	rc = 0;
+
 exit:
 	return rc;
 }
@@ -619,7 +651,7 @@ static int32_t sony_sensor_set_fps(struct msm_sensor_ctrl_t *s_ctrl,
 }
 
 static int32_t sony_sensor_write_exp_gain1(struct msm_sensor_ctrl_t *s_ctrl,
-		uint16_t gain, uint32_t line)
+	        uint16_t gain, uint32_t line, int32_t luma_avg, uint16_t fgain)
 {
 	return 0;
 }
@@ -917,7 +949,16 @@ static int32_t sony_sensor_get_csi_params(struct msm_sensor_ctrl_t *s_ctrl,
 
 	return 0;
 }
-
+static int sony_sensor_set_vision_mode(struct msm_sensor_ctrl_t *s_ctrl,
+		int32_t vision_mode_enable)
+{
+	return 0;
+}
+static int sony_sensor_set_vision_ae_control(struct msm_sensor_ctrl_t *s_ctrl,
+		int ae_mode)
+{
+	return 0;
+}
 static int32_t sony_sensor_i2c_probe(struct i2c_client *client,
 	const struct i2c_device_id *device_id)
 {
@@ -1151,6 +1192,8 @@ static struct msm_sensor_fn_t sony_sensor_func_tbl = {
 	.sensor_match_id		= sony_sensor_match_id,
 	.sensor_adjust_frame_lines	= sony_sensor_adjust_frame_lines,
 	.sensor_get_csi_params		= sony_sensor_get_csi_params,
+	.sensor_set_vision_mode		= sony_sensor_set_vision_mode,
+	.sensor_set_vision_ae_control	= sony_sensor_set_vision_ae_control,
 };
 
 static struct msm_sensor_reg_t sony_sensor_regs[] = {
