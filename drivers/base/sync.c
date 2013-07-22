@@ -30,6 +30,8 @@
 
 static void sync_fence_signal_pt(struct sync_pt *pt);
 static int _sync_pt_has_signaled(struct sync_pt *pt);
+static void sync_fence_free(struct kref *kref);
+static void sync_dump(struct sync_fence *fence);
 
 static LIST_HEAD(sync_timeline_list_head);
 static DEFINE_SPINLOCK(sync_timeline_list_lock);
@@ -574,14 +576,16 @@ int sync_fence_wait(struct sync_fence *fence, long timeout)
 	if (err < 0)
 		return err;
 
-	if (fence->status < 0)
+	if (fence->status < 0) {
+		pr_info("fence error %d on [%p]\n", fence->status, fence);
+		sync_dump(fence);
 		return fence->status;
 
 	if (fence->status == 0) {
 		if (timeout > 0) {
 			pr_info("fence timeout on [%p] after %dms\n", fence,
 				jiffies_to_msecs(timeout));
-			sync_dump();
+			sync_dump(fence);
 		}
 		return -ETIME;
 
@@ -898,7 +902,36 @@ static __init int sync_debugfs_init(void)
 	debugfs_create_file("sync", S_IRUGO, NULL, NULL, &sync_debugfs_fops);
 	return 0;
 }
-
 late_initcall(sync_debugfs_init);
 
+#define DUMP_CHUNK 256
+static char sync_dump_buf[64 * 1024];
+static void sync_dump(struct sync_fence *fence)
+{
+       struct seq_file s = {
+               .buf = sync_dump_buf,
+               .size = sizeof(sync_dump_buf) - 1,
+       };
+       int i;
+
+       seq_printf(&s, "fence:\n--------------\n");
+       sync_print_fence(&s, fence);
+       seq_printf(&s, "\n");
+
+       for (i = 0; i < s.count; i += DUMP_CHUNK) {
+               if ((s.count - i) > DUMP_CHUNK) {
+                       char c = s.buf[i + DUMP_CHUNK];
+                       s.buf[i + DUMP_CHUNK] = 0;
+                       pr_cont("%s", s.buf + i);
+                       s.buf[i + DUMP_CHUNK] = c;
+               } else {
+                       s.buf[s.count] = 0;
+                       pr_cont("%s", s.buf + i);
+               }
+       }
+}
+#else
+static void sync_dump(struct sync_fence *fence)
+{
+}
 #endif
