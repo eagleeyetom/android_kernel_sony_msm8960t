@@ -2,11 +2,8 @@
  * drivers/gpu/ion/ion_cp_heap.c
  *
  * Copyright (C) 2011 Google, Inc.
-<<<<<<< HEAD
  * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
-=======
  * Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
->>>>>>> c7cd2b0... gpu: ion: Add flag for forcing contiguous allocations
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -227,8 +224,6 @@ ion_phys_addr_t ion_cp_allocate(struct ion_heap *heap,
 		return ION_CP_ALLOCATE_FAIL;
 	}
 
-<<<<<<< HEAD
-=======
 	if (!force_contig && !secure_allocation &&
 	     cp_heap->disallow_non_secure_allocation) {
 		mutex_unlock(&cp_heap->lock);
@@ -237,7 +232,6 @@ ion_phys_addr_t ion_cp_allocate(struct ion_heap *heap,
 		return ION_CP_ALLOCATE_FAIL;
 	}
 
->>>>>>> c7cd2b0... gpu: ion: Add flag for forcing contiguous allocations
 	if (secure_allocation &&
 	    (cp_heap->umap_count > 0 || cp_heap->kmap_cached_count > 0)) {
 		mutex_unlock(&cp_heap->lock);

@@ -19,8 +19,6 @@
 
 #include <linux/ion.h>
 
-<<<<<<< HEAD
-=======
 enum msm_ion_heap_types {
 	ION_HEAP_TYPE_MSM_START = ION_HEAP_TYPE_CUSTOM + 1,
 	ION_HEAP_TYPE_IOMMU = ION_HEAP_TYPE_MSM_START,
@@ -321,5 +319,4 @@ struct ion_flag_data {
 #define ION_IOC_GET_FLAGS		_IOWR(ION_IOC_MSM_MAGIC, 3, \
 						struct ion_flag_data)
 
->>>>>>> c7cd2b0... gpu: ion: Add flag for forcing contiguous allocations
 #endif
