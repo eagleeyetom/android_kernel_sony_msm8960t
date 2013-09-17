@@ -327,15 +327,6 @@ static inline int cpu_is_apq8064aa(void)
 
 static inline int cpu_is_msm8930(void)
 {
-#ifdef CONFIG_ARCH_APQ8064
-	return read_msm_cpu_type() == MSM_CPU_8064AA;
-#else
-	return 0;
-#endif
-}
-
-static inline int cpu_is_msm8930(void)
-{
 #ifdef CONFIG_ARCH_MSM8930
 	return read_msm_cpu_type() == MSM_CPU_8930;
 #else
@@ -447,8 +438,7 @@ static inline int soc_class_is_apq8064(void)
 
 static inline int soc_class_is_msm8930(void)
 {
-	return cpu_is_msm8930() || cpu_is_msm8930aa() || cpu_is_msm8930ab() ||
-	       cpu_is_msm8627();
+	return cpu_is_msm8930() || cpu_is_msm8930aa() || cpu_is_msm8627();
 }
 
 #endif
