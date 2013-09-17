@@ -109,6 +109,10 @@ extern struct platform_device msm_device_sdc2;
 extern struct platform_device msm_device_sdc3;
 extern struct platform_device msm_device_sdc4;
 
+extern struct platform_device msm8960_pc_cntr;
+extern struct platform_device msm8064_pc_cntr;
+extern struct platform_device msm8930_pc_cntr;
+
 extern struct platform_device msm_device_gadget_peripheral;
 extern struct platform_device msm_device_hsusb_host;
 extern struct platform_device msm_device_hsusb_host2;
@@ -453,9 +457,5 @@ extern struct platform_device msm9615_device_acpuclk;
 
 extern struct platform_device msm_gpio_device;
 
-extern struct platform_device apq_cpudai_mi2s;
-extern struct platform_device apq_cpudai_i2s_rx;
-extern struct platform_device apq_cpudai_i2s_tx;
-#ifdef CONFIG_SONY_QSCFLASHING_UART4
-extern struct platform_device msm8960_device_uart_gsbi11;
-#endif
+extern struct platform_device amdm_8064_device;
+extern struct platform_device bmdm_8064_device;

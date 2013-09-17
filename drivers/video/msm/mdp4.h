@@ -1,4 +1,5 @@
-/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+/*
+ * Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -28,6 +29,11 @@ extern uint32 mdp4_extn_disp;
 extern char *mmss_cc_base;	/* mutimedia sub system clock control */
 extern spinlock_t dsi_clk_lock;
 extern u32 mdp_max_clk;
+
+extern u64 mdp_max_bw;
+#define MDP4_BW_AB_FACTOR (115)	/* 1.15 */
+#define MDP4_BW_IB_FACTOR (125)	/* 1.25 */
+#define MDP_BUS_SCALE_AB_STEP (0x4000000)
 
 #define MDP4_OVERLAYPROC0_BASE	0x10000
 #define MDP4_OVERLAYPROC1_BASE	0x18000
@@ -476,7 +482,7 @@ int mdp4_overlay_dtv_set(struct msm_fb_data_type *mfd,
 int mdp4_overlay_dtv_unset(struct msm_fb_data_type *mfd,
 			struct mdp4_overlay_pipe *pipe);
 void mdp4_dmae_done_dtv(void);
-void mdp4_dtv_wait4vsync(int cndx, long long *vtime);
+void mdp4_dtv_wait4vsync(int cndx);
 void mdp4_dtv_vsync_ctrl(struct fb_info *info, int enable);
 void mdp4_dtv_base_swap(int cndx, struct mdp4_overlay_pipe *pipe);
 #else
@@ -509,7 +515,7 @@ static inline void mdp4_dmae_done_dtv(void)
 {
     /* empty */
 }
-static inline void mdp4_dtv_wait4vsync(int cndx, long long *vtime)
+static inline void mdp4_dtv_wait4vsync(int cndx)
 {
     /* empty */
 }
@@ -582,7 +588,7 @@ int mdp4_overlay_format2type(uint32 format);
 int mdp4_overlay_format2pipe(struct mdp4_overlay_pipe *pipe);
 int mdp4_overlay_get(struct fb_info *info, struct mdp_overlay *req);
 int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req);
-int mdp4_overlay_wait4vsync(struct fb_info *info, long long *vtime);
+int mdp4_overlay_wait4vsync(struct fb_info *info);
 int mdp4_overlay_vsync_ctrl(struct fb_info *info, int enable);
 int mdp4_overlay_unset(struct fb_info *info, int ndx);
 int mdp4_overlay_unset_mixer(int mixer);
@@ -614,7 +620,7 @@ void mdp4_overlay1_done_dtv(void);
 void mdp4_overlay1_done_atv(void);
 void mdp4_primary_vsync_lcdc(void);
 void mdp4_external_vsync_dtv(void);
-void mdp4_lcdc_wait4vsync(int cndx, long long *vtime);
+void mdp4_lcdc_wait4vsync(int cndx);
 void mdp4_overlay_lcdc_vsync_push(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe);
 void mdp4_mddi_overlay_dmas_restore(void);
@@ -772,8 +778,8 @@ int mdp4_dsi_video_off(struct platform_device *pdev);
 int mdp4_dsi_video_on(struct platform_device *pdev);
 void mdp4_primary_vsync_dsi_video(void);
 void mdp4_dsi_cmd_base_swap(int cndx, struct mdp4_overlay_pipe *pipe);
-void mdp4_dsi_cmd_wait4vsync(int cndx, long long *vtime);
-void mdp4_dsi_video_wait4vsync(int cndx, long long *vtime);
+void mdp4_dsi_cmd_wait4vsync(int cndx);
+void mdp4_dsi_video_wait4vsync(int cndx);
 void mdp4_dsi_cmd_pipe_queue(int cndx, struct mdp4_overlay_pipe *pipe);
 void mdp4_dsi_video_pipe_queue(int cndx, struct mdp4_overlay_pipe *pipe);
 int mdp4_dsi_video_pipe_commit(int cndx, int wait);
@@ -813,10 +819,10 @@ static inline void mdp4_dsi_cmd_base_swap(int cndx,
 	struct mdp4_overlay_pipe *pipe)
 {
 }
-static inline void mdp4_dsi_cmd_wait4vsync(int cndx, long long *vtime)
+static inline void mdp4_dsi_cmd_wait4vsync(int cndx)
 {
 }
-static inline void mdp4_dsi_video_wait4vsync(int cndx, long long *vtime)
+static inline void mdp4_dsi_video_wait4vsync(int cndx)
 {
 }
 static inline void mdp4_dsi_cmd_pipe_queue(int cndx,
@@ -915,6 +921,7 @@ int mdp4_csc_enable(struct mdp_csc_cfg_data *config);
 int mdp4_pcc_cfg(struct mdp_pcc_cfg_data *cfg_ptr);
 int mdp4_argc_cfg(struct mdp_pgc_lut_data *pgc_ptr);
 int mdp4_qseed_cfg(struct mdp_qseed_cfg_data *cfg);
+int mdp4_calib_config(struct mdp_calib_config_data *cfg);
 int mdp4_qseed_access_cfg(struct mdp_qseed_cfg *cfg, uint32_t base);
 u32  mdp4_allocate_writeback_buf(struct msm_fb_data_type *mfd, u32 mix_num);
 void mdp4_init_writeback_buf(struct msm_fb_data_type *mfd, u32 mix_num);
@@ -961,5 +968,13 @@ void mdp4_wfd_pipe_queue(int cndx, struct mdp4_overlay_pipe *pipe);
 void mdp4_wfd_init(int cndx);
 int mdp4_wfd_pipe_commit(struct msm_fb_data_type *mfd, int cndx, int wait);
 #endif
-
+#ifdef CONFIG_FB_MSM_OVERLAY
+int mdp4_unmap_sec_resource(void);
+#else
+static inline void mdp4_unmap_sec_resource(void);
+{
+	/* empty */
+	return 0;
+}
+#endif
 #endif /* MDP_H */

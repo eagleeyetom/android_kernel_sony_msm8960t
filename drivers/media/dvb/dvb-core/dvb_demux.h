@@ -4,7 +4,7 @@
  * Copyright (C) 2000-2001 Marcus Metzler & Ralph Metzler
  *                         for convergence integrated media GmbH
  *
- * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License
@@ -90,6 +90,8 @@ struct dvb_demux_feed {
 	u16 pid;
 	u8 *buffer;
 	int buffer_size;
+	enum dmx_tsp_format_t tsp_out_format;
+	struct dmx_secure_mode secure_mode;
 
 	struct timespec timeout;
 	struct dvb_demux_filter *filter;
@@ -102,6 +104,9 @@ struct dvb_demux_feed {
 	int pusi_seen;		/* prevents feeding of garbage from previous section */
 
 	u32 peslen;
+	u32 pes_tei_counter;
+	u32 pes_cont_err_counter;
+	u32 pes_ts_packets_num;
 
 	struct list_head list_head;
 	unsigned int index;	/* a unique index for each feed (can be used as hardware pid filter index) */
@@ -124,6 +129,10 @@ struct dvb_demux {
 	int (*decoder_fullness_abort)(struct dvb_demux_feed *feed);
 	int (*decoder_buffer_status)(struct dvb_demux_feed *feed,
 				struct dmx_buffer_status *dmx_buffer_status);
+	int (*reuse_decoder_buffer)(struct dvb_demux_feed *feed,
+				int cookie);
+	int (*set_secure_mode)(struct dvb_demux_feed *feed,
+				struct dmx_secure_mode *secure_mode);
 	u32 (*check_crc32)(struct dvb_demux_feed *feed,
 			    const u8 *buf, size_t len);
 	void (*memcopy)(struct dvb_demux_feed *feed, u8 *dst,
@@ -155,7 +164,7 @@ struct dvb_demux {
 	uint32_t speed_pkts_cnt; /* for TS speed check */
 
 	enum dmx_tsp_format_t tsp_format;
-	enum dmx_tsp_format_t tsp_out_format;
+	size_t ts_packet_size;
 
 	enum dmx_playback_mode_t playback_mode;
 	int sw_filter_abort;

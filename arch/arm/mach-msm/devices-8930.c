@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -38,6 +38,23 @@
 #include <mach/mpm.h>
 #endif
 #define MSM8930_RPM_MASTER_STATS_BASE	0x10B100
+#define MSM8930_PC_CNTR_PHYS	(MSM8930_IMEM_PHYS + 0x664)
+#define MSM8930_PC_CNTR_SIZE		0x40
+
+static struct resource msm8930_resources_pccntr[] = {
+	{
+		.start	= MSM8930_PC_CNTR_PHYS,
+		.end	= MSM8930_PC_CNTR_PHYS + MSM8930_PC_CNTR_SIZE,
+		.flags	= IORESOURCE_MEM,
+	},
+};
+
+struct platform_device msm8930_pc_cntr = {
+	.name		= "pc-cntr",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(msm8930_resources_pccntr),
+	.resource	= msm8930_resources_pccntr,
+};
 
 struct msm_rpm_platform_data msm8930_rpm_data __initdata = {
 	.reg_base_addrs = {
@@ -1142,6 +1159,7 @@ struct msm_vidc_platform_data apq8930_vidc_platform_data = {
 	.disable_fullhd = 0,
 	.cont_mode_dpb_count = 18,
 	.fw_addr = 0x9fe00000,
+	.enable_sec_metadata = 0,
 };
 
 struct platform_device apq8930_msm_device_vidc = {

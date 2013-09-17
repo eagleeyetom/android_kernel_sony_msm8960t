@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2013, Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1986,6 +1986,11 @@ u32 vcd_handle_input_done(
 	orig_frame = vcd_find_buffer_pool_entry(&cctxt->in_buf_pool,
 					 transc->ip_buf_entry->virtual);
 
+	if (!orig_frame) {
+		rc = VCD_ERR_ILLEGAL_PARM;
+		VCD_FAILED_RETURN(rc, "Couldn't find buffer");
+	}
+
 	if ((transc->ip_buf_entry->frame.virtual !=
 		 frame->vcd_frm.virtual)
 		|| !transc->ip_buf_entry->in_use) {
@@ -2012,8 +2017,11 @@ u32 vcd_handle_input_done(
 		return VCD_ERR_FAIL;
 	}
 
-	if (orig_frame != transc->ip_buf_entry)
+	if (orig_frame != transc->ip_buf_entry) {
+		VCD_MSG_HIGH("%s: free duplicate buffer", __func__);
 		kfree(transc->ip_buf_entry);
+		transc->ip_buf_entry = NULL;
+	}
 	transc->ip_buf_entry = NULL;
 	transc->input_done = true;
 
@@ -2306,10 +2314,12 @@ u32 vcd_handle_frame_done(
 	op_frm->vcd_frm.time_stamp = transc->time_stamp;
 	op_frm->vcd_frm.ip_frm_tag = transc->ip_frm_tag;
 
-	if (transc->flags & VCD_FRAME_FLAG_EOSEQ)
-		op_frm->vcd_frm.flags |= VCD_FRAME_FLAG_EOSEQ;
-	else
-		op_frm->vcd_frm.flags &= ~VCD_FRAME_FLAG_EOSEQ;
+	if (!(op_frm->vcd_frm.flags & VCD_FRAME_FLAG_EOSEQ)) {
+		if (transc->flags & VCD_FRAME_FLAG_EOSEQ)
+			op_frm->vcd_frm.flags |= VCD_FRAME_FLAG_EOSEQ;
+		else
+			op_frm->vcd_frm.flags &= ~VCD_FRAME_FLAG_EOSEQ;
+	}
 
 	if (cctxt->decoding)
 		op_frm->vcd_frm.frame = transc->frame;
@@ -2782,6 +2792,7 @@ u32 vcd_handle_input_frame(
 	struct vcd_frame_data *frm_entry;
 	u32 rc = VCD_S_SUCCESS;
 	u32 eos_handled = false;
+	u32 duplicate_buffer = false;
 
 	VCD_MSG_LOW("vcd_handle_input_frame:");
 
@@ -2865,6 +2876,8 @@ u32 vcd_handle_input_frame(
 		buf_entry->allocated = orig_frame->allocated;
 		buf_entry->in_use = 1; /* meaningless for the dupe buffers */
 		buf_entry->frame = orig_frame->frame;
+		duplicate_buffer = true;
+		VCD_MSG_HIGH("%s: duplicate buffer", __func__);
 	} else
 		buf_entry = orig_frame;
 
@@ -2888,6 +2901,10 @@ u32 vcd_handle_input_frame(
 	if (VCD_FAILED(rc) || eos_handled) {
 		VCD_MSG_HIGH("rc = 0x%x, eos_handled = %d", rc,
 				 eos_handled);
+		if ((duplicate_buffer) && (buf_entry)) {
+			kfree(buf_entry);
+			buf_entry = NULL;
+		}
 
 		return rc;
 	}

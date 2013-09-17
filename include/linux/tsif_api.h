@@ -3,8 +3,7 @@
  *
  * Kernel API
  *
- * Copyright (c) 2009-2010, Code Aurora Forum. All rights
- * reserved.
+ * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -203,6 +202,28 @@ int tsif_start(void *cookie);
  * query data buffer info using tsif_get_info() and reset its data pointers.
  */
 void tsif_stop(void *cookie);
+/**
+ * tsif_get_ref_clk_counter - return the TSIF clock reference (TCR) counter.
+ * @cookie:      TSIF cookie previously obtained with tsif_attach()
+ * @tcr_counter: the value of TCR counter
+ *
+ * Return      error code
+ *
+ * TCR increments at a rate equal to 27 MHz/256 = 105.47 kHz.
+ */
+int tsif_get_ref_clk_counter(void *cookie, u32 *tcr_counter);
+
+/**
+ * tsif_get_ref_clk_counter - return the TSIF clock reference (TCR) counter.
+ * @cookie:      TSIF cookie previously obtained with tsif_attach()
+ * @tcr_counter: the value of TCR counter
+ *
+ * Return      error code
+ *
+ * TCR increments at a rate equal to 27 MHz/256 = 105.47 kHz.
+ */
+int tsif_get_ref_clk_counter(void *cookie, u32 *tcr_counter);
+
 /**
  * tsif_reclaim_packets - inform that buffer space may be reclaimed
  * @cookie:    TSIF cookie previously obtained with tsif_attach()

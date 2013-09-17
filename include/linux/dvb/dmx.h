@@ -5,7 +5,7 @@
  *                  & Ralph  Metzler <ralph@convergence.de>
  *                    for convergence integrated media GmbH
  *
- * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License
@@ -38,6 +38,8 @@
 
 /* Min recording chunk upon which event is generated */
 #define DMX_REC_BUFF_CHUNK_MIN_SIZE		(100*188)
+
+#define DMX_MAX_DECODER_BUFFER_NUM		(32)
 
 typedef enum
 {
@@ -244,6 +246,18 @@ struct dmx_pes_event_info {
 
 	/* Flags passed in filter events */
 	__u32 flags;
+
+	/*
+	 * Number of TS packets with Transport Error Indicator (TEI)
+	 * found while constructing the PES.
+	 */
+	__u32 transport_error_indicator_counter;
+
+	/* Number of continuity errors found while constructing the PES */
+	__u32 continuity_error_counter;
+
+	/* Total number of TS packets holding the PES */
+	__u32 ts_packets_num;
 };
 
 /* Section info associated with DMX_EVENT_NEW_SECTION event */
@@ -411,6 +425,48 @@ struct dmx_stc {
 };
 
 
+struct dmx_secure_mode {
+	/*
+	 * Specifies whether secure mode should be set or not for the filter's
+	 * pid. Note that DMX_OUT_TSDEMUX_TAP filters can have more than 1 pid
+	 */
+	int is_secured;
+
+	/* PID to associate with key ladder id */
+	__u16 pid;
+
+	/* key ladder information to associate with the specified pid */
+	__u32 key_ladder_id;
+};
+
+struct dmx_secure_mode {
+	/*
+	 * Specifies whether secure mode should be set or not for the filter's
+	 * pid. Note that DMX_OUT_TSDEMUX_TAP filters can have more than 1 pid
+	 */
+	int is_secured;
+
+	/* PID to associate with key ladder id */
+	__u16 pid;
+
+	/* key ladder information to associate with the specified pid */
+	__u32 key_ladder_id;
+};
+
+struct dmx_secure_mode {
+	/*
+	 * Specifies whether secure mode should be set or not for the filter's
+	 * pid. Note that DMX_OUT_TSDEMUX_TAP filters can have more than 1 pid
+	 */
+	int is_secured;
+
+	/* PID to associate with key ladder id */
+	__u16 pid;
+
+	/* key ladder information to associate with the specified pid */
+	__u32 key_ladder_id;
+};
+
 #define DMX_START                _IO('o', 41)
 #define DMX_STOP                 _IO('o', 42)
 #define DMX_SET_FILTER           _IOW('o', 43, struct dmx_sct_filter_params)
@@ -429,6 +485,12 @@ struct dmx_stc {
 #define DMX_RELEASE_DATA		 _IO('o', 57)
 #define DMX_FEED_DATA			 _IO('o', 58)
 #define DMX_SET_PLAYBACK_MODE	 _IOW('o', 59, enum dmx_playback_mode_t)
-#define DMX_GET_EVENT			 _IOR('o', 60, struct dmx_filter_event)
+#define DMX_GET_EVENT		 _IOR('o', 60, struct dmx_filter_event)
+#define DMX_SET_BUFFER_MODE	 _IOW('o', 61, enum dmx_buffer_mode)
+#define DMX_SET_BUFFER		 _IOW('o', 62, struct dmx_buffer)
+#define DMX_SET_DECODER_BUFFER	 _IOW('o', 63, struct dmx_decoder_buffers)
+#define DMX_REUSE_DECODER_BUFFER _IO('o', 64)
+#define DMX_SET_SECURE_MODE	_IOW('o', 65, struct dmx_secure_mode)
+
 
 #endif /*_DVBDMX_H_*/

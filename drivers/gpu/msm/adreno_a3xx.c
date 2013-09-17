@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -68,6 +68,18 @@ const unsigned int a3xx_registers[] = {
 };
 
 const unsigned int a3xx_registers_count = ARRAY_SIZE(a3xx_registers) / 2;
+
+/* Removed the following HLSQ register ranges from being read during
+ * fault tolerance since reading the registers may cause the device to hang:
+ */
+const unsigned int a3xx_hlsq_registers[] = {
+	0x0e00, 0x0e05, 0x0e0c, 0x0e0c, 0x0e22, 0x0e23,
+	0x2200, 0x2212, 0x2214, 0x2217, 0x221a, 0x221a,
+	0x2600, 0x2612, 0x2614, 0x2617, 0x261a, 0x261a,
+};
+
+const unsigned int a3xx_hlsq_registers_count =
+			ARRAY_SIZE(a3xx_hlsq_registers) / 2;
 
 /* The set of additional registers to be dumped for A330 */
 
@@ -2840,12 +2852,22 @@ static void a3xx_start(struct adreno_device *adreno_dev)
 	adreno_regwrite(device, A3XX_RBBM_PERFCTR_CTL, 0x01);
 
 	/*
-	 * Set SP perfcounter 7 to count SP_FS_FULL_ALU_INSTRUCTIONS
+	 * Set SP perfcounter 5 to count SP_ALU_ACTIVE_CYCLES, it includes
+	 * all ALU instruction execution regardless precision or shader ID.
+	 * Set SP perfcounter 6 to count SP0_ICL1_MISSES, It counts
+	 * USP L1 instruction miss request.
+	 * Set SP perfcounter 7 to count SP_FS_FULL_ALU_INSTRUCTIONS, it
+	 * counts USP flow control instruction execution.
 	 * we will use this to augment our hang detection
 	 */
-
-	adreno_regwrite(device, A3XX_SP_PERFCOUNTER7_SELECT,
-		SP_FS_FULL_ALU_INSTRUCTIONS);
+	if (adreno_dev->fast_hang_detect) {
+		adreno_regwrite(device, A3XX_SP_PERFCOUNTER5_SELECT,
+			SP_ALU_ACTIVE_CYCLES);
+		adreno_regwrite(device, A3XX_SP_PERFCOUNTER6_SELECT,
+			SP0_ICL1_MISSES);
+		adreno_regwrite(device, A3XX_SP_PERFCOUNTER7_SELECT,
+			SP_FS_CFLOW_INSTRUCTIONS);
+	}
 }
 
 /* Defined in adreno_a3xx_snapshot.c */

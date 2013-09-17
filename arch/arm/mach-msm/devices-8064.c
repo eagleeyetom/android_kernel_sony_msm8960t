@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -99,6 +99,23 @@
 #define PCIE20_PHYS   0x1b500000
 #define PCIE20_SIZE   SZ_4K
 #define MSM8064_RPM_MASTER_STATS_BASE	0x10BB00
+#define MSM8064_PC_CNTR_PHYS	(APQ8064_IMEM_PHYS + 0x664)
+#define MSM8064_PC_CNTR_SIZE		0x40
+
+static struct resource msm8064_resources_pccntr[] = {
+	{
+		.start	= MSM8064_PC_CNTR_PHYS,
+		.end	= MSM8064_PC_CNTR_PHYS + MSM8064_PC_CNTR_SIZE,
+		.flags	= IORESOURCE_MEM,
+	},
+};
+
+struct platform_device msm8064_pc_cntr = {
+	.name		= "pc-cntr",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(msm8064_resources_pccntr),
+	.resource	= msm8064_resources_pccntr,
+};
 
 static struct msm_watchdog_pdata msm_watchdog_pdata = {
 	.pet_time = 10000,
@@ -648,26 +665,49 @@ static const struct msm_gpio tspp_gpios[] = {
 
 static struct resource tspp_resources[] = {
 	[0] = {
+		.name = "TSIF_TSPP_IRQ",
 		.flags = IORESOURCE_IRQ,
 		.start = TSIF_TSPP_IRQ,
-		.end   = TSIF1_IRQ,
+		.end   = TSIF_TSPP_IRQ,
 	},
 	[1] = {
+		.name = "TSIF0_IRQ",
+		.flags = IORESOURCE_IRQ,
+		.start = TSIF1_IRQ,
+		.end   = TSIF1_IRQ,
+	},
+	[2] = {
+		.name = "TSIF1_IRQ",
+		.flags = IORESOURCE_IRQ,
+		.start = TSIF2_IRQ,
+		.end   = TSIF2_IRQ,
+	},
+	[3] = {
+		.name = "TSIF_BAM_IRQ",
+		.flags = IORESOURCE_IRQ,
+		.start = TSIF_BAM_IRQ,
+		.end   = TSIF_BAM_IRQ,
+	},
+	[4] = {
+		.name = "MSM_TSIF0_PHYS",
 		.flags = IORESOURCE_MEM,
 		.start = MSM_TSIF0_PHYS,
 		.end   = MSM_TSIF0_PHYS + MSM_TSIF_SIZE - 1,
 	},
-	[2] = {
+	[5] = {
+		.name = "MSM_TSIF1_PHYS",
 		.flags = IORESOURCE_MEM,
 		.start = MSM_TSIF1_PHYS,
 		.end   = MSM_TSIF1_PHYS + MSM_TSIF_SIZE - 1,
 	},
-	[3] = {
+	[6] = {
+		.name = "MSM_TSPP_PHYS",
 		.flags = IORESOURCE_MEM,
 		.start = MSM_TSPP_PHYS,
 		.end   = MSM_TSPP_PHYS + MSM_TSPP_SIZE - 1,
 	},
-	[4] = {
+	[7] = {
+		.name = "MSM_TSPP_BAM_PHYS",
 		.flags = IORESOURCE_MEM,
 		.start = MSM_TSPP_BAM_PHYS,
 		.end   = MSM_TSPP_BAM_PHYS + MSM_TSPP_BAM_SIZE - 1,
@@ -1445,6 +1485,7 @@ struct msm_vidc_platform_data apq8064_vidc_platform_data = {
 	.disable_fullhd = 0,
 	.cont_mode_dpb_count = 18,
 	.fw_addr = 0x9fe00000,
+	.enable_sec_metadata = 1,
 };
 
 struct platform_device apq8064_msm_device_vidc = {
@@ -2549,11 +2590,20 @@ struct msm_mpm_device_data apq8064_mpm_dev_data __initdata = {
 #define MDM2AP_STATUS			49
 #define AP2MDM_STATUS			48
 #define AP2MDM_SOFT_RESET		27
-#define I2S_AP2MDM_SOFT_RESET		0
+#define I2S_AP2MDM_SOFT_RESET	0
 #define AP2MDM_WAKEUP			35
 #define I2S_AP2MDM_WAKEUP		44
 #define MDM2AP_PBLRDY			46
+#define AMDM2AP_PBLRDY_DSDA2	31
 #define I2S_MDM2AP_PBLRDY		81
+
+/* Gpios for second MDM */
+#define BMDM2AP_ERRFATAL		81
+#define AP2BMDM_ERRFATAL		18
+#define BMDM2AP_STATUS			32
+#define AP2BMDM_STATUS			56
+#define AP2BMDM_SOFT_RESET		3
+#define AP2BMDM_WAKEUP			29
 
 static struct resource mdm_resources[] = {
 	{
@@ -2596,6 +2646,90 @@ static struct resource mdm_resources[] = {
 		.start	= MDM2AP_PBLRDY,
 		.end	= MDM2AP_PBLRDY,
 		.name	= "MDM2AP_PBLRDY",
+		.flags	= IORESOURCE_IO,
+	},
+};
+
+static struct resource mdm_dsda2_amdm_resources[] = {
+	{
+		.start	= MDM2AP_ERRFATAL,
+		.end	= MDM2AP_ERRFATAL,
+		.name	= "MDM2AP_ERRFATAL",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2MDM_ERRFATAL,
+		.end	= AP2MDM_ERRFATAL,
+		.name	= "AP2MDM_ERRFATAL",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= MDM2AP_STATUS,
+		.end	= MDM2AP_STATUS,
+		.name	= "MDM2AP_STATUS",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2MDM_STATUS,
+		.end	= AP2MDM_STATUS,
+		.name	= "AP2MDM_STATUS",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2MDM_SOFT_RESET,
+		.end	= AP2MDM_SOFT_RESET,
+		.name	= "AP2MDM_SOFT_RESET",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2MDM_WAKEUP,
+		.end	= AP2MDM_WAKEUP,
+		.name	= "AP2MDM_WAKEUP",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AMDM2AP_PBLRDY_DSDA2,
+		.end	= AMDM2AP_PBLRDY_DSDA2,
+		.name	= "MDM2AP_PBLRDY",
+		.flags	= IORESOURCE_IO,
+	},
+};
+
+static struct resource mdm_dsda2_bmdm_resources[] = {
+	{
+		.start	= BMDM2AP_ERRFATAL,
+		.end	= BMDM2AP_ERRFATAL,
+		.name	= "MDM2AP_ERRFATAL",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2BMDM_ERRFATAL,
+		.end	= AP2BMDM_ERRFATAL,
+		.name	= "AP2MDM_ERRFATAL",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= BMDM2AP_STATUS,
+		.end	= BMDM2AP_STATUS,
+		.name	= "MDM2AP_STATUS",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2BMDM_STATUS,
+		.end	= AP2BMDM_STATUS,
+		.name	= "AP2MDM_STATUS",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2BMDM_SOFT_RESET,
+		.end	= AP2BMDM_SOFT_RESET,
+		.name	= "AP2MDM_SOFT_RESET",
+		.flags	= IORESOURCE_IO,
+	},
+	{
+		.start	= AP2BMDM_WAKEUP,
+		.end	= AP2BMDM_WAKEUP,
+		.name	= "AP2MDM_WAKEUP",
 		.flags	= IORESOURCE_IO,
 	},
 };
@@ -2650,6 +2784,20 @@ struct platform_device mdm_8064_device = {
 	.id		= -1,
 	.num_resources	= ARRAY_SIZE(mdm_resources),
 	.resource	= mdm_resources,
+};
+
+struct platform_device amdm_8064_device = {
+	.name		= "mdm2_modem",
+	.id		= 0,
+	.num_resources	= ARRAY_SIZE(mdm_dsda2_amdm_resources),
+	.resource	= mdm_dsda2_amdm_resources,
+};
+
+struct platform_device bmdm_8064_device = {
+	.name		= "mdm2_modem",
+	.id		= 1,
+	.num_resources	= ARRAY_SIZE(mdm_dsda2_bmdm_resources),
+	.resource	= mdm_dsda2_bmdm_resources,
 };
 
 struct platform_device i2s_mdm_8064_device = {

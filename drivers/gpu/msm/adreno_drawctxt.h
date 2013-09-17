@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -12,6 +12,8 @@
  */
 #ifndef __ADRENO_DRAWCTXT_H
 #define __ADRENO_DRAWCTXT_H
+
+#include <linux/sched.h>
 
 #include "adreno_pm4types.h"
 #include "a2xx_reg.h"
@@ -43,11 +45,17 @@
 /* Trash state for context */
 #define CTXT_FLAGS_TRASHSTATE		0x00020000
 /* per context timestamps enabled */
-#define CTXT_FLAGS_PER_CONTEXT_TS	0x00040000
-/* Context has caused a GPU hang and recovered properly */
-#define CTXT_FLAGS_GPU_HANG_RECOVERED	0x00008000
+#define CTXT_FLAGS_PER_CONTEXT_TS	BIT(11)
+/* Context has caused a GPU hang and fault tolerance successful */
+#define CTXT_FLAGS_GPU_HANG_FT		BIT(12)
 /* Context is being destroyed so dont save it */
-#define CTXT_FLAGS_BEING_DESTOYED	0x00010000
+#define CTXT_FLAGS_BEING_DESTROYED	BIT(13)
+/* User mode generated timestamps enabled */
+#define CTXT_FLAGS_USER_GENERATED_TS    BIT(14)
+/* Context skip till EOF */
+#define CTXT_FLAGS_SKIP_EOF             BIT(15)
+/* Context no fault tolerance */
+#define CTXT_FLAGS_NO_FAULT_TOLERANCE  BIT(16)
 
 struct kgsl_device;
 struct adreno_device;
@@ -80,7 +88,10 @@ struct gmem_shadow_t {
 };
 
 struct adreno_context {
+	pid_t pid;
+	char pid_name[TASK_COMM_LEN];
 	unsigned int id;
+	unsigned int ib_gpu_time_used;
 	uint32_t flags;
 	struct kgsl_pagetable *pagetable;
 	struct kgsl_memdesc gpustate;

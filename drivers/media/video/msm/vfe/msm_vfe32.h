@@ -1,5 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
- * Copyright (C) 2012 Sony Mobile Communications AB.
+/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -996,6 +995,9 @@ struct vfe_share_ctrl_t {
 	atomic_t rdi0_update_ack_pending;
 	atomic_t rdi1_update_ack_pending;
 	atomic_t rdi2_update_ack_pending;
+
+	uint8_t stream_error;
+	uint32_t rdi_comp;
 
 };
 

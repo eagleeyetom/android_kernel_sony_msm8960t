@@ -14,19 +14,16 @@
 #define __LINUX_DIAG_DLOAD_H__
 
 
-#define PID_MAGIC_ID		0x71432909
-#define SERIAL_NUM_MAGIC_ID	0x61945374
-#define SERIAL_NUMBER_LENGTH	128
 
-struct magic_num_struct {
-	uint32_t pid;
-	uint32_t serial_num;
-};
-
-struct dload_struct {
-	uint32_t	pid;
-	char		serial_number[SERIAL_NUMBER_LENGTH];
-	struct magic_num_struct magic_struct;
-};
-
+int chk_equip_id_and_mask(int equip_id, uint8_t *buf);
+void diag_send_event_mask_update(smd_channel_t *, int num_bytes);
+void diag_send_msg_mask_update(smd_channel_t *, int ssid_first,
+					 int ssid_last, int proc);
+void diag_send_log_mask_update(smd_channel_t *, int);
+void diag_mask_update_fn(struct work_struct *work);
+void diag_send_feature_mask_update(smd_channel_t *ch, int proc);
+int diag_process_apps_masks(unsigned char *buf, int len);
+void diag_masks_init(void);
+void diag_masks_exit(void);
+extern int diag_event_num_bytes;
 #endif

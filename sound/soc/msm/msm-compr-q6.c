@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -85,11 +85,11 @@ static struct snd_pcm_hardware msm_compr_hardware_playback = {
 	.rate_max =	     48000,
 	.channels_min =	 1,
 	.channels_max =	 8,
-	.buffer_bytes_max =     1200 * 1024 * 2,
-	.period_bytes_min =	2400,
-	.period_bytes_max =     1200 * 1024,
-	.periods_min =	  2,
-	.periods_max =	  1024,
+	.buffer_bytes_max =     1024 * 1024,
+	.period_bytes_min =	128 * 1024,
+	.period_bytes_max =     256 * 1024,
+	.periods_min =	  4,
+	.periods_max =	  8,
 	.fifo_size =	    0,
 };
 
@@ -461,7 +461,7 @@ static int msm_compr_playback_prepare(struct snd_pcm_substream *substream)
 
 	prtd->enabled = 1;
 	prtd->cmd_ack = 0;
-
+	prtd->cmd_interrupt = 0;
 	return 0;
 }
 
@@ -568,6 +568,7 @@ static int msm_compr_trigger(struct snd_pcm_substream *substream, int cmd)
 				break;
 			}
 		}
+		atomic_set(&prtd->pending_buffer, 1);
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
 		pr_debug("%s: Trigger start\n", __func__);
@@ -641,17 +642,6 @@ static int msm_compr_open(struct snd_pcm_substream *substream)
 	struct compr_audio *compr;
 	struct msm_audio *prtd;
 	int ret = 0;
-	struct asm_softpause_params softpause = {
-		.enable = SOFT_PAUSE_ENABLE,
-		.period = SOFT_PAUSE_PERIOD,
-		.step = SOFT_PAUSE_STEP,
-		.rampingcurve = SOFT_PAUSE_CURVE_LINEAR,
-	};
-	struct asm_softvolume_params softvol = {
-		.period = SOFT_VOLUME_PERIOD,
-		.step = SOFT_VOLUME_STEP,
-		.rampingcurve = SOFT_VOLUME_CURVE_LINEAR,
-	};
 
 	pr_debug("%s\n", __func__);
 	compr = kzalloc(sizeof(struct compr_audio), GFP_KERNEL);
@@ -700,21 +690,6 @@ static int msm_compr_open(struct snd_pcm_substream *substream)
 	runtime->private_data = compr;
 	atomic_set(&prtd->eos, 0);
 	compressed_audio.prtd =  &compr->prtd;
-	ret = compressed_set_volume(compressed_audio.volume);
-	if (ret < 0)
-		pr_err("%s : Set Volume failed : %d", __func__, ret);
-
-	ret = q6asm_set_softpause(compressed_audio.prtd->audio_client,
-								&softpause);
-	if (ret < 0)
-		pr_err("%s: Send SoftPause Param failed ret=%d\n",
-			__func__, ret);
-	ret = q6asm_set_softvolume(compressed_audio.prtd->audio_client,
-								&softvol);
-	if (ret < 0)
-		pr_err("%s: Send SoftVolume Param failed ret=%d\n",
-			__func__, ret);
-
 	return 0;
 }
 
@@ -852,6 +827,17 @@ static int msm_compr_hw_params(struct snd_pcm_substream *substream,
 	struct snd_dma_buffer *dma_buf = &substream->dma_buffer;
 	struct audio_buffer *buf;
 	int dir, ret;
+	struct asm_softpause_params softpause = {
+		.enable = SOFT_PAUSE_ENABLE,
+		.period = SOFT_PAUSE_PERIOD,
+		.step = SOFT_PAUSE_STEP,
+		.rampingcurve = SOFT_PAUSE_CURVE_LINEAR,
+	};
+	struct asm_softvolume_params softvol = {
+		.period = SOFT_VOLUME_PERIOD,
+		.step = SOFT_VOLUME_STEP,
+		.rampingcurve = SOFT_VOLUME_CURVE_LINEAR,
+	};
 
 	pr_debug("%s\n", __func__);
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
@@ -886,7 +872,21 @@ static int msm_compr_hw_params(struct snd_pcm_substream *substream,
 				prtd->audio_client->perf_mode,
 				prtd->session_id,
 				substream->stream);
+			ret = compressed_set_volume(compressed_audio.volume);
+			if (ret < 0)
+				pr_err("%s : Set Volume failed : %d",
+					__func__, ret);
 
+			ret = q6asm_set_softpause(prtd->audio_client,
+					&softpause);
+			if (ret < 0)
+				pr_err("%s: Send SoftPause Param failed ret=%d\n",
+					__func__, ret);
+			ret = q6asm_set_softvolume(prtd->audio_client,
+					&softvol);
+			if (ret < 0)
+				pr_err("%s: Send SoftVolume Param failed ret=%d\n",
+					__func__, ret);
 			break;
 		}
 	} else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
@@ -1075,7 +1075,7 @@ static int msm_compr_ioctl(struct snd_pcm_substream *substream,
 			  (substream->stream == SNDRV_PCM_STREAM_CAPTURE &&
 						atomic_read(&prtd->start))) {
 			if (atomic_read(&prtd->eos)) {
-				prtd->cmd_ack = 1;
+				prtd->cmd_interrupt = 1;
 				wake_up(&the_locks.eos_wait);
 				atomic_set(&prtd->eos, 0);
 			}
@@ -1098,17 +1098,28 @@ static int msm_compr_ioctl(struct snd_pcm_substream *substream,
 		break;
 	case SNDRV_COMPRESS_DRAIN:
 		pr_debug("%s: SNDRV_COMPRESS_DRAIN\n", __func__);
+		if (atomic_read(&prtd->pending_buffer)) {
+			pr_debug("%s: no pending writes, drain would block\n",
+			__func__);
+			return -EWOULDBLOCK;
+		}
+
 		atomic_set(&prtd->eos, 1);
 		atomic_set(&prtd->pending_buffer, 0);
 		prtd->cmd_ack = 0;
 		q6asm_cmd_nowait(prtd->audio_client, CMD_EOS);
 		/* Wait indefinitely for  DRAIN. Flush can also signal this*/
 		rc = wait_event_interruptible(the_locks.eos_wait,
-			prtd->cmd_ack);
+			(prtd->cmd_ack || prtd->cmd_interrupt));
 		if (rc < 0)
 			pr_err("EOS cmd interrupted\n");
 		pr_debug("%s: SNDRV_COMPRESS_DRAIN  out of wait\n", __func__);
-		return 0;
+
+		if (prtd->cmd_interrupt)
+			rc = -EINTR;
+
+		prtd->cmd_interrupt = 0;
+		return rc;
 	default:
 		break;
 	}

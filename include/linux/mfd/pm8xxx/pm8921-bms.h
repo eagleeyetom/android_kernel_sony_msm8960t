@@ -1,5 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
- * Copyright (C) 2012 Sony Mobile Communications AB.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,7 +14,6 @@
 #define __PM8XXX_BMS_H
 
 #include <linux/errno.h>
-#include <linux/types.h>
 #include <linux/mfd/pm8xxx/batterydata-lib.h>
 
 #define PM8921_BMS_DEV_NAME	"pm8921-bms"
@@ -47,7 +45,6 @@ struct pm8xxx_bms_core_data {
 struct pm8921_bms_platform_data {
 	struct pm8xxx_bms_core_data	bms_cdata;
 	enum battery_type		battery_type;
-	struct bms_battery_data		*battery_data;
 	int				r_sense_uohm;
 	unsigned int			i_test;
 	unsigned int			v_cutoff;
@@ -132,9 +129,11 @@ void pm8921_bms_calibrate_hkadc(void);
 int pm8921_bms_get_simultaneous_battery_voltage_and_current(int *ibat_ua,
 								int *vbat_uv);
 /**
- * pm8921_bms_get_rbatt - function to get the battery resistance in mOhm.
+ * pm8921_bms_get_current_max
+ *	- function to get the max current that can be drawn from
+ *	  the battery before it dips below the min allowed voltage
  */
-int pm8921_bms_get_rbatt(void);
+int pm8921_bms_get_current_max(void);
 /**
  * pm8921_bms_invalidate_shutdown_soc - function to notify the bms driver that
  *					the battery was replaced between reboot
@@ -194,6 +193,10 @@ static inline void pm8921_bms_invalidate_shutdown_soc(void)
 {
 }
 static inline int pm8921_bms_cc_uah(int *cc_uah)
+{
+	return -ENXIO;
+}
+static inline int pm8921_bms_get_current_max(void)
 {
 	return -ENXIO;
 }

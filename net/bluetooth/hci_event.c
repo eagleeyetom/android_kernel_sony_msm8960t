@@ -1,7 +1,6 @@
 /*
    BlueZ - Bluetooth protocol stack for Linux
-   Copyright (c) 2000-2001, 2010-2012, Code Aurora Forum. All rights reserved.
-   Copyright (C) 2012 Sony Mobile Communications AB.
+   Copyright (c) 2000-2001, 2010-2012 The Linux Foundation. All rights reserved.
 
    Written 2000,2001 by Maxim Krasnyansky <maxk@qualcomm.com>
 
@@ -1670,6 +1669,8 @@ static inline void hci_conn_complete_evt(struct hci_dev *hdev, struct sk_buff *s
 		if (conn->type == ACL_LINK) {
 			struct hci_cp_read_remote_version cp;
 			cp.handle = ev->handle;
+			hci_send_cmd(hdev, HCI_OP_READ_CLOCK_OFFSET,
+				sizeof(cp), &cp);
 			hci_send_cmd(hdev, HCI_OP_READ_REMOTE_VERSION,
 				sizeof(cp), &cp);
 		}
@@ -2667,12 +2668,6 @@ static inline void hci_link_key_request_evt(struct hci_dev *hdev, struct sk_buff
 	if (conn) {
 		BT_DBG("Conn pending sec level is %d, ssp is %d, key len is %d",
 			conn->pending_sec_level, conn->ssp_mode, key->pin_len);
-	}
-	if (conn && (conn->ssp_mode == 0) &&
-		(conn->pending_sec_level == BT_SECURITY_HIGH) &&
-		(key->pin_len != 16)) {
-		BT_DBG("Security is high ignoring this key");
-		goto not_found;
 	}
 
 	if (key->key_type == 0x04 && conn && conn->auth_type != 0xff &&

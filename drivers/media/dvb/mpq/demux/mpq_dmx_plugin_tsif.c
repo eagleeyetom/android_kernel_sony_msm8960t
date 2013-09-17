@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -447,24 +447,17 @@ static int mpq_tsif_dmx_start_filtering(struct dvb_demux_feed *feed)
 	 */
 	feed->pusi_seen = 0;
 
-	/*
-	 * For video PES, data is tunneled to the decoder,
-	 * initialize tunneling and pes parsing.
-	 */
-	if (mpq_dmx_is_video_feed(feed)) {
-		ret = mpq_dmx_init_video_feed(feed);
+	ret = mpq_dmx_init_mpq_feed(feed);
+	if (ret < 0) {
+		MPQ_DVB_DBG_PRINT(
+			"%s: mpq_dmx_init_mpq_feed failed(%d)\n",
+			__func__,
+			ret);
 
-		if (ret < 0) {
-			MPQ_DVB_DBG_PRINT(
-				"%s: mpq_dmx_init_video_feed failed(%d)\n",
-				__func__,
-				ret);
+		if (mpq_demux->source < DMX_SOURCE_DVR0)
+			mpq_tsif_dmx_stop(mpq_demux);
 
-			if (mpq_demux->source < DMX_SOURCE_DVR0)
-				mpq_tsif_dmx_stop(mpq_demux);
-
-			return ret;
-		}
+		return ret;
 	}
 
 	return ret;
@@ -496,12 +489,7 @@ static int mpq_tsif_dmx_stop_filtering(struct dvb_demux_feed *feed)
 		return -EINVAL;
 	}
 
-	/*
-	 * For video PES, data is tunneled to the decoder,
-	 * terminate tunnel and pes parsing.
-	 */
-	if (mpq_dmx_is_video_feed(feed))
-		mpq_dmx_terminate_video_feed(feed);
+	mpq_dmx_terminate_feed(feed);
 
 	if (mpq_demux->source < DMX_SOURCE_DVR0) {
 		/* Source from TSIF, need to configure TSIF hardware */
@@ -584,6 +572,80 @@ static int mpq_tsif_dmx_get_caps(struct dmx_demux *demux,
 }
 
 /**
+ * Reads TSIF STC from TSPP
+ *
+ * @demux: demux device
+ * @num: STC number. 0 for TSIF0 and 1 for TSIF1.
+ * @stc: STC value
+ * @base: divisor to get 90KHz value
+ *
+ * Return     error code
+ */
+static int mpq_tsif_dmx_get_stc(struct dmx_demux *demux, unsigned int num,
+		u64 *stc, unsigned int *base)
+{
+	struct tsif_driver_info *tsif_driver;
+	u32 tcr_counter;
+
+	if (!demux || !stc || !base)
+		return -EINVAL;
+
+	if (num == 0)
+		tsif_driver = &mpq_dmx_tsif_info.tsif[0].tsif_driver;
+	else if (num == 1)
+		tsif_driver = &mpq_dmx_tsif_info.tsif[1].tsif_driver;
+	else
+		return -EINVAL;
+
+	if (!tsif_driver->tsif_handler)
+		return -ENODEV;
+
+	tsif_get_ref_clk_counter(tsif_driver->tsif_handler, &tcr_counter);
+
+	*stc = ((u64)tcr_counter) * 256; /* conversion to 27MHz */
+	*base = 300; /* divisor to get 90KHz clock from stc value */
+
+	return 0;
+}
+
+/**
+ * Reads TSIF STC from TSPP
+ *
+ * @demux: demux device
+ * @num: STC number. 0 for TSIF0 and 1 for TSIF1.
+ * @stc: STC value
+ * @base: divisor to get 90KHz value
+ *
+ * Return     error code
+ */
+static int mpq_tsif_dmx_get_stc(struct dmx_demux *demux, unsigned int num,
+		u64 *stc, unsigned int *base)
+{
+	struct tsif_driver_info *tsif_driver;
+	u32 tcr_counter;
+
+	if (!demux || !stc || !base)
+		return -EINVAL;
+
+	if (num == 0)
+		tsif_driver = &mpq_dmx_tsif_info.tsif[0].tsif_driver;
+	else if (num == 1)
+		tsif_driver = &mpq_dmx_tsif_info.tsif[1].tsif_driver;
+	else
+		return -EINVAL;
+
+	if (!tsif_driver->tsif_handler)
+		return -ENODEV;
+
+	tsif_get_ref_clk_counter(tsif_driver->tsif_handler, &tcr_counter);
+
+	*stc = ((u64)tcr_counter) * 256; /* conversion to 27MHz */
+	*base = 300; /* divisor to get 90KHz clock from stc value */
+
+	return 0;
+}
+
+/**
  * Initialize a single demux device.
  *
  * @mpq_adapter: MPQ DVB adapter
@@ -615,18 +677,13 @@ static int mpq_tsif_dmx_init(
 	mpq_demux->demux.start_feed = mpq_tsif_dmx_start_filtering;
 	mpq_demux->demux.stop_feed = mpq_tsif_dmx_stop_filtering;
 	mpq_demux->demux.write_to_decoder = mpq_tsif_dmx_write_to_decoder;
-
-	mpq_demux->demux.decoder_fullness_init =
-		mpq_dmx_decoder_fullness_init;
-
-	mpq_demux->demux.decoder_fullness_wait =
-		mpq_dmx_decoder_fullness_wait;
-
+	mpq_demux->demux.decoder_fullness_init = mpq_dmx_decoder_fullness_init;
+	mpq_demux->demux.decoder_fullness_wait = mpq_dmx_decoder_fullness_wait;
 	mpq_demux->demux.decoder_fullness_abort =
 		mpq_dmx_decoder_fullness_abort;
-
-	mpq_demux->demux.decoder_buffer_status =
-		mpq_dmx_decoder_buffer_status;
+	mpq_demux->demux.decoder_buffer_status = mpq_dmx_decoder_buffer_status;
+	mpq_demux->demux.reuse_decoder_buffer = mpq_dmx_reuse_decoder_buffer;
+	mpq_demux->demux.set_secure_mode = NULL;
 
 	/* Initialize dvb_demux object */
 	result = dvb_dmx_init(&mpq_demux->demux);
@@ -644,6 +701,7 @@ static int mpq_tsif_dmx_init(
 		DMXDEV_CAP_INDEXING;
 
 	mpq_demux->dmxdev.demux->set_source = mpq_dmx_set_source;
+	mpq_demux->dmxdev.demux->get_stc = mpq_tsif_dmx_get_stc;
 	mpq_demux->dmxdev.demux->get_caps = mpq_tsif_dmx_get_caps;
 
 	result = dvb_dmxdev_init(&mpq_demux->dmxdev, mpq_adapter);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -180,6 +180,10 @@ static struct pm8xxx_gpio_init pm8917_gpios[] __initdata = {
 
 /* Initial PM8917 MPP configurations */
 static struct pm8xxx_mpp_init pm8917_mpps[] __initdata = {
+	PM8917_MPP_INIT(PM8XXX_AMUX_MPP_3, A_INPUT,
+				PM8XXX_MPP_AIN_AMUX_CH8, DIN_TO_INT),
+	/* Configure MPP01 for USB ID detection */
+	PM8917_MPP_INIT(1, D_INPUT, PM8921_MPP_DIG_LEVEL_S4, DIN_TO_INT),
 };
 
 void __init msm8930_pm8038_gpio_mpp_init(void)
@@ -323,7 +327,7 @@ static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 	.resume_charge_percent	= 99,
 	.term_current		= CHG_TERM_MA,
 	.cool_temp		= 10,
-	.warm_temp		= 40,
+	.warm_temp		= 45,
 	.temp_check_period	= 1,
 	.max_bat_chg_current	= 1100,
 	.cool_bat_chg_current	= 350,

@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -1605,6 +1605,9 @@ int q6asm_open_read_write(struct audio_client *ac,
 		break;
 	case FORMAT_AMRWB:
 		open.write_format = AMRWB_FS;
+		break;
+	case FORMAT_AMR_WB_PLUS:
+		open.write_format = AMR_WB_PLUS;
 		break;
 	case FORMAT_V13K:
 		open.write_format = V13K_FS;

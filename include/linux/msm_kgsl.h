@@ -12,6 +12,9 @@
 #define KGSL_CONTEXT_PREAMBLE		0x00000010
 #define KGSL_CONTEXT_TRASH_STATE	0x00000020
 #define KGSL_CONTEXT_PER_CONTEXT_TS	0x00000040
+#define KGSL_CONTEXT_USER_GENERATED_TS	0x00000080
+#define KGSL_CONTEXT_NO_FAULT_TOLERANCE 0x00000200
+
 
 #define KGSL_CONTEXT_INVALID 0xffffffff
 
@@ -125,6 +128,31 @@ enum kgsl_property_type {
 	KGSL_PROP_VERSION         = 0x00000008,
 	KGSL_PROP_GPU_RESET_STAT  = 0x00000009,
 	KGSL_PROP_PWRCTRL         = 0x0000000E,
+	KGSL_PROP_FAULT_TOLERANCE = 0x00000011,
+};
+
+/* Fault Tolerance policy flags */
+#define  KGSL_FT_DISABLE                  0x00000001
+#define  KGSL_FT_REPLAY                   0x00000002
+#define  KGSL_FT_SKIPIB                   0x00000004
+#define  KGSL_FT_SKIPFRAME                0x00000008
+#define  KGSL_FT_DEFAULT_POLICY           (KGSL_FT_REPLAY + KGSL_FT_SKIPIB)
+
+/* Pagefault policy flags */
+#define KGSL_FT_PAGEFAULT_INT_ENABLE         0x00000001
+#define KGSL_FT_PAGEFAULT_GPUHALT_ENABLE     0x00000002
+#define KGSL_FT_PAGEFAULT_LOG_ONE_PER_PAGE   0x00000004
+#define KGSL_FT_PAGEFAULT_LOG_ONE_PER_INT    0x00000008
+#define KGSL_FT_PAGEFAULT_DEFAULT_POLICY     (KGSL_FT_PAGEFAULT_INT_ENABLE + \
+					KGSL_FT_PAGEFAULT_LOG_ONE_PER_PAGE)
+
+/* Fault tolerance config */
+struct kgsl_ft_config {
+	unsigned int ft_policy;    /* Fault Tolerance policy flags */
+	unsigned int ft_pf_policy; /* Pagefault policy flags */
+	unsigned int ft_pm_dump;   /* KGSL enable postmortem dump */
+	unsigned int ft_detect_ms;
+	unsigned int ft_dos_timeout_ms;
 };
 
 struct kgsl_shadowprop {
@@ -367,6 +395,12 @@ struct kgsl_bind_gmem_shadow {
     _IOW(KGSL_IOC_TYPE, 0x22, struct kgsl_bind_gmem_shadow)
 
 /* add a block of memory into the GPU address space */
+
+/*
+ * IOCTL_KGSL_SHAREDMEM_FROM_VMALLOC deprecated 09/2012
+ * use IOCTL_KGSL_GPUMEM_ALLOC instead
+ */
+
 struct kgsl_sharedmem_from_vmalloc {
 	unsigned int gpuaddr;	/*output param */
 	unsigned int hostptr;

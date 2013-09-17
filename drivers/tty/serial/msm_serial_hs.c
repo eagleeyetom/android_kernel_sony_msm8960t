@@ -3,7 +3,7 @@
  * MSM 7k High speed uart driver
  *
  * Copyright (c) 2008 Google Inc.
- * Copyright (c) 2007-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2007-2013, The Linux Foundation. All rights reserved.
  * Modified: Nick Pelly <npelly@google.com>
  *
  * All source code in this file is licensed under the following license
@@ -754,6 +754,8 @@ static void msm_hs_set_termios(struct uart_port *uport,
 
 	uport->ignore_status_mask = termios->c_iflag & INPCK;
 	uport->ignore_status_mask |= termios->c_iflag & IGNPAR;
+	uport->ignore_status_mask |= termios->c_iflag & IGNBRK;
+
 	uport->read_status_mask = (termios->c_cflag & CREAD);
 
 	msm_hs_write(uport, UARTDM_IMR_ADDR, 0);
@@ -1031,12 +1033,26 @@ static void msm_serial_hs_rx_tlet(unsigned long tlet_ptr)
 
 	if (unlikely(status & UARTDM_SR_PAR_FRAME_BMSK)) {
 		/* Can not tell difference between parity & frame error */
+		if (hs_serial_debug_mask)
+			printk(KERN_WARNING "msm_serial_hs: parity error\n");
 		uport->icount.parity++;
 		error_f = 1;
-		if (uport->ignore_status_mask & IGNPAR) {
+		if (!(uport->ignore_status_mask & IGNPAR)) {
 			retval = tty_insert_flip_char(tty, 0, TTY_PARITY);
 			if (!retval)
 				msm_uport->rx.buffer_pending |= TTY_PARITY;
+		}
+	}
+
+	if (unlikely(status & UARTDM_SR_RX_BREAK_BMSK)) {
+		if (hs_serial_debug_mask)
+			printk(KERN_WARNING "msm_serial_hs: Rx break\n");
+		uport->icount.brk++;
+		error_f = 1;
+		if (!(uport->ignore_status_mask & IGNBRK)) {
+			retval = tty_insert_flip_char(tty, 0, TTY_BREAK);
+			if (!retval)
+				msm_uport->rx.buffer_pending |= TTY_BREAK;
 		}
 	}
 
@@ -1245,11 +1261,12 @@ static void msm_hs_enable_ms_locked(struct uart_port *uport)
 
 }
 
-static void msm_hs_flush_buffer(struct uart_port *uport)
+static void msm_hs_flush_buffer_locked(struct uart_port *uport)
 {
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
 
-	msm_uport->tty_flush_receive = true;
+	if (msm_uport->tx.dma_in_flight)
+		msm_uport->tty_flush_receive = true;
 }
 
 /*
@@ -2228,7 +2245,7 @@ static struct uart_ops msm_hs_ops = {
 	.config_port = msm_hs_config_port,
 	.release_port = msm_hs_release_port,
 	.request_port = msm_hs_request_port,
-	.flush_buffer = msm_hs_flush_buffer,
+	.flush_buffer = msm_hs_flush_buffer_locked,
 };
 
 module_init(msm_serial_hs_init);

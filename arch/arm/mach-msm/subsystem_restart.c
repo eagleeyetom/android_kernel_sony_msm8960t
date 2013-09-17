@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -308,8 +308,8 @@ static void do_epoch_check(struct subsys_device *dev)
 
 	if (time_first && n >= max_restarts_check) {
 		if ((curr_time->tv_sec - time_first->tv_sec) <
-				max_history_time_check)
-			panic("Subsystems have crashed %d times in less than "
+				max_history_time_check) {
+			panic("Subsystems have crashed %d times in less than "\
 				"%ld seconds!", max_restarts_check,
 				max_history_time_check);
 	}
@@ -347,7 +347,7 @@ static void subsystem_shutdown(struct subsys_device *dev, void *data)
 	const char *name = dev->desc->name;
 
 	pr_info("[%p]: Shutting down %s\n", current, name);
-	if (dev->desc->shutdown(dev->desc) < 0)
+	if (dev->desc->shutdown(dev->desc) < 0) {
 		panic("subsys-restart: [%p]: Failed to shutdown %s!",
 			current, name);
 	subsys_set_state(dev, SUBSYS_OFFLINE);
@@ -367,27 +367,9 @@ static void subsystem_powerup(struct subsys_device *dev, void *data)
 	const char *name = dev->desc->name;
 
 	pr_info("[%p]: Powering up %s\n", current, name);
-	if (dev->desc->powerup(dev->desc) < 0)
+	if (dev->desc->powerup(dev->desc) < 0) {
 		panic("[%p]: Failed to powerup %s!", current, name);
-	subsys_set_state(dev, SUBSYS_ONLINE);
-}
-
-static int __find_subsys(struct device *dev, void *data)
-{
-	struct subsys_device *subsys = to_subsys(dev);
-	return !strcmp(subsys->desc->name, data);
-}
-
-static struct subsys_device *find_subsys(const char *str)
-{
-	struct device *dev;
-
-	if (!str)
-		return NULL;
-
-	dev = bus_find_device(&subsys_bus_type, NULL, (void *)str,
-			__find_subsys);
-	return dev ? to_subsys(dev) : NULL;
+	}
 }
 
 static void subsystem_restart_wq_func(struct work_struct *work)
@@ -442,7 +424,7 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 	 * who initiated the original restart but has crashed while the restart
 	 * order is being rebooted.
 	 */
-	if (!mutex_trylock(powerup_lock))
+	if (!mutex_trylock(powerup_lock)) {
 		panic("%s[%p]: Subsystem died during powerup!",
 						__func__, current);
 
@@ -521,17 +503,7 @@ static void __subsystem_restart_dev(struct subsys_device *dev)
 
 int subsystem_restart_dev(struct subsys_device *dev)
 {
-	const char *name;
-
-	if (!get_device(&dev->dev))
-		return -ENODEV;
-
-	if (!try_module_get(dev->owner)) {
-		put_device(&dev->dev);
-		return -ENODEV;
-	}
-
-	name = dev->desc->name;
+	const char *name = dev->desc->name;
 
 	/*
 	 * If a system reboot/shutdown is underway, ignore subsystem errors.
@@ -804,29 +776,13 @@ static int __init ssr_init_soc_restart_orders(void)
 
 static int __init subsys_restart_init(void)
 {
-	int ret;
+	restart_level = RESET_SOC;
 
 	ssr_wq = alloc_workqueue("ssr_wq", WQ_CPU_INTENSIVE, 0);
-	BUG_ON(!ssr_wq);
+	if (!ssr_wq)
+		panic("%s: out of memory\n", __func__);
 
-	ret = bus_register(&subsys_bus_type);
-	if (ret)
-		goto err_bus;
-	ret = subsys_debugfs_init();
-	if (ret)
-		goto err_debugfs;
-	ret = ssr_init_soc_restart_orders();
-	if (ret)
-		goto err_soc;
-	return 0;
-
-err_soc:
-	subsys_debugfs_exit();
-err_debugfs:
-	bus_unregister(&subsys_bus_type);
-err_bus:
-	destroy_workqueue(ssr_wq);
-	return ret;
+	return ssr_init_soc_restart_orders();
 }
 arch_initcall(subsys_restart_init);
 

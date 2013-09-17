@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -46,6 +46,17 @@ static struct gpiomux_setting gpio_spi_cs2_config = {
 	.pull = GPIOMUX_PULL_NONE,
 };
 
+
+struct msm_gpiomux_config apq8064_ethernet_configs[] = {
+	{
+		.gpio = 43,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &gpio_eth_config,
+			[GPIOMUX_ACTIVE] = &gpio_eth_config,
+		}
+	},
+};
+#endif
 /* Chip selects for SPI clients */
 static struct gpiomux_setting gpio_spi_cs_config = {
 	.func = GPIOMUX_FUNC_GPIO,
@@ -59,17 +70,6 @@ static struct gpiomux_setting gpio_epm_spi_cs_config = {
 	.drv = GPIOMUX_DRV_12MA,
 	.pull = GPIOMUX_PULL_UP,
 };
-
-struct msm_gpiomux_config apq8064_ethernet_configs[] = {
-	{
-		.gpio = 43,
-		.settings = {
-			[GPIOMUX_SUSPENDED] = &gpio_eth_config,
-			[GPIOMUX_ACTIVE] = &gpio_eth_config,
-		}
-	},
-};
-#endif
 
 #ifdef CONFIG_MSM_VCAP
 static struct gpiomux_setting gpio_vcap_config[] = {
@@ -946,6 +946,105 @@ static struct msm_gpiomux_config mdm_configs[] __initdata = {
 	},
 };
 
+static struct msm_gpiomux_config amdm_configs[] __initdata = {
+	/* AP2MDM_STATUS */
+	{
+		.gpio = 48,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ap2mdm_cfg,
+		}
+	},
+	/* MDM2AP_STATUS */
+	{
+		.gpio = 49,
+		.settings = {
+			[GPIOMUX_ACTIVE] = &mdm2ap_status_cfg,
+			[GPIOMUX_SUSPENDED] = &mdm2ap_status_cfg,
+		}
+	},
+	/* MDM2AP_ERRFATAL */
+	{
+		.gpio = 19,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &mdm2ap_errfatal_cfg,
+		}
+	},
+	/* AP2MDM_ERRFATAL */
+	{
+		.gpio = 18,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ap2mdm_cfg,
+		}
+	},
+	/* AP2MDM_SOFT_RESET, aka AP2MDM_PON_RESET_N */
+	{
+		.gpio = 27,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ap2mdm_soft_reset_cfg,
+		}
+	},
+	/* AP2MDM_WAKEUP */
+	{
+		.gpio = 35,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ap2mdm_wakeup,
+		}
+	},
+	/* MDM2AP_PBL_READY*/
+	{
+		.gpio = 31,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &mdm2ap_pblrdy,
+		}
+	},
+};
+
+static struct msm_gpiomux_config bmdm_configs[] __initdata = {
+	/* AP2MDM_STATUS */
+	{
+		.gpio = 56,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ap2mdm_cfg,
+		}
+	},
+	/* MDM2AP_STATUS */
+	{
+		.gpio = 32,
+		.settings = {
+			[GPIOMUX_ACTIVE] = &mdm2ap_status_cfg,
+			[GPIOMUX_SUSPENDED] = &mdm2ap_status_cfg,
+		}
+	},
+	/* MDM2AP_ERRFATAL */
+	{
+		.gpio = 81,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &mdm2ap_errfatal_cfg,
+		}
+	},
+	/* AP2MDM_ERRFATAL */
+	{
+		.gpio = 18,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ap2mdm_cfg,
+		}
+	},
+	/* AP2MDM_SOFT_RESET, aka AP2MDM_PON_RESET_N */
+	{
+		.gpio = 3,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ap2mdm_soft_reset_cfg,
+		}
+	},
+	/* AP2MDM_WAKEUP */
+	{
+		.gpio = 29,
+		.settings = {
+			[GPIOMUX_SUSPENDED] = &ap2mdm_wakeup,
+		}
+	},
+};
+
 static struct msm_gpiomux_config mdm_i2s_configs[] __initdata = {
 	/* AP2MDM_STATUS */
 	{
@@ -1544,7 +1643,12 @@ void __init apq8064_init_gpiomux(void)
 			ARRAY_SIZE(apq8064_ext_regulator_configs));
 
 	if (machine_is_apq8064_mtp()) {
-		if (SOCINFO_VERSION_MINOR(platform_version) == 1)
+		if (socinfo_get_platform_subtype() == PLATFORM_SUBTYPE_DSDA2) {
+			msm_gpiomux_install(amdm_configs,
+					ARRAY_SIZE(amdm_configs));
+			msm_gpiomux_install(bmdm_configs,
+				ARRAY_SIZE(bmdm_configs));
+		} else if (SOCINFO_VERSION_MINOR(platform_version) == 1)
 			msm_gpiomux_install(mdm_i2s_configs,
 					ARRAY_SIZE(mdm_i2s_configs));
 		else

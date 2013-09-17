@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,16 +23,9 @@
 #include <linux/gpio.h>
 #include <linux/wakelock.h>
 #include <linux/delay.h>
-#include <linux/of.h>
-#include <linux/of_gpio.h>
 #include <mach/peripheral-loader.h>
-#include <linux/clk.h>
-
 #include <mach/msm_smd.h>
 #include <mach/msm_iomap.h>
-#ifdef CONFIG_WCNSS_MEM_PRE_ALLOC
-#include "wcnss_prealloc.h"
-#endif
 
 #define DEVICE "wcnss_wlan"
 #define VERSION "1.01"
@@ -170,16 +163,11 @@ static ssize_t wcnss_version_show(struct device *dev,
 
 static DEVICE_ATTR(wcnss_version, S_IRUSR,
 		wcnss_version_show, NULL);
-
 /* interface to reset Riva by sending the reset interrupt */
 void wcnss_reset_intr(void)
 {
-	if (wcnss_hardware_type() == WCNSS_RIVA_HW) {
-		wmb();
-		__raw_writel(1 << 24, MSM_APCS_GCC_BASE + 0x8);
-	} else {
-		pr_err("%s: reset interrupt not supported\n", __func__);
-	}
+	wmb();
+	__raw_writel(1 << 24, MSM_APCS_GCC_BASE + 0x8);
 }
 EXPORT_SYMBOL(wcnss_reset_intr);
 
@@ -595,15 +583,6 @@ void wcnss_allow_suspend()
 }
 EXPORT_SYMBOL(wcnss_allow_suspend);
 
-int wcnss_hardware_type(void)
-{
-	if (penv)
-		return penv->wcnss_hw_type;
-	else
-		return -ENODEV;
-}
-EXPORT_SYMBOL(wcnss_hardware_type);
-
 static int wcnss_smd_tx(void *data, int len)
 {
 	int ret = 0;
@@ -713,6 +692,16 @@ wcnss_trigger_config(struct platform_device *pdev)
 	penv->thermal_mitigation = 0;
 	strlcpy(penv->wcnss_version, "INVALID", WCNSS_VERSION_LEN);
 
+	penv->gpios_5wire = platform_get_resource_byname(pdev, IORESOURCE_IO,
+							"wcnss_gpios_5wire");
+
+	/* allocate 5-wire GPIO resources */
+	if (!penv->gpios_5wire) {
+		dev_err(&pdev->dev, "insufficient IO resources\n");
+		ret = -ENOENT;
+		goto fail_gpio_res;
+	}
+
 	/* Configure 5 wire GPIOs */
 	if (!has_pronto_hw) {
 		penv->gpios_5wire = platform_get_resource_byname(pdev,
@@ -763,6 +752,7 @@ wcnss_trigger_config(struct platform_device *pdev)
 		ret = -ENOENT;
 		goto fail_res;
 	}
+
 	INIT_WORK(&penv->wcnssctrl_rx_work, wcnssctrl_rx_handler);
 	INIT_WORK(&penv->wcnssctrl_version_work, wcnss_send_version_req);
 
@@ -787,6 +777,7 @@ wcnss_trigger_config(struct platform_device *pdev)
 
 fail_wake:
 	wake_lock_destroy(&penv->wcnss_wake_lock);
+
 fail_res:
 	if (penv->pil)
 		pil_put(penv->pil);

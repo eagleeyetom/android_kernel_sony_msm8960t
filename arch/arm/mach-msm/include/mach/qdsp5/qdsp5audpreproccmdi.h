@@ -2,30 +2,30 @@
 #define QDSP5AUDPREPROCCMDI_H
 
 /*====*====*====*====*====*====*====*====*====*====*====*====*====*====*====*
-*
-*    A U D I O   P R E   P R O C E S S I N G  I N T E R N A L  C O M M A N D S
-*
-* GENERAL DESCRIPTION
-*   This file contains defintions of format blocks of commands
-*   that are accepted by AUDPREPROC Task
-*
-* REFERENCES
-*   None
-*
-* EXTERNALIZED FUNCTIONS
-*   None
-*
-* Copyright (c) 1992-2009, 2012 Code Aurora Forum. All rights reserved.
-*
-* This software is licensed under the terms of the GNU General Public
-* License version 2, as published by the Free Software Foundation, and
-* may be copied, distributed, and modified under those terms.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
+
+    A U D I O   P R E   P R O C E S S I N G  I N T E R N A L  C O M M A N D S
+
+GENERAL DESCRIPTION
+  This file contains defintions of format blocks of commands 
+  that are accepted by AUDPREPROC Task
+
+REFERENCES
+  None
+
+EXTERNALIZED FUNCTIONS
+  None
+
+Copyright (c) 1992-2009, The Linux Foundation. All rights reserved.
+
+This software is licensed under the terms of the GNU General Public
+License version 2, as published by the Free Software Foundation, and
+may be copied, distributed, and modified under those terms.
+ 
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
 *====*====*====*====*====*====*====*====*====*====*====*====*====*====*====*/
 /*===========================================================================
 

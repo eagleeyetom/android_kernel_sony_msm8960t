@@ -1,5 +1,4 @@
-/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
- * Copyright (c) 2012 Sony Mobile Communications AB.
+/* Copyright (c) 2009-2013, Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -699,9 +698,12 @@ static int msm_otg_set_suspend(struct usb_phy *phy, int suspend)
 	if (aca_enabled())
 		return 0;
 
-	if (atomic_read(&motg->in_lpm) == suspend)
-		return 0;
-
+	/*
+	 * UDC and HCD call usb_phy_set_suspend() to enter/exit LPM
+	 * during bus suspend/resume.  Update the relevant state
+	 * machine inputs and trigger LPM entry/exit.  Checking
+	 * in_lpm flag would avoid unnecessary work scheduling.
+	 */
 	if (suspend) {
 		switch (phy->state) {
 		case OTG_STATE_A_WAIT_BCON:
@@ -711,14 +713,16 @@ static int msm_otg_set_suspend(struct usb_phy *phy, int suspend)
 		case OTG_STATE_A_HOST:
 			pr_debug("host bus suspend\n");
 			clear_bit(A_BUS_REQ, &motg->inputs);
-			queue_work(motg->wq, &motg->sm_work);
+			if (!atomic_read(&motg->in_lpm))
+				queue_work(system_nrt_wq, &motg->sm_work);
 			break;
 		case OTG_STATE_B_PERIPHERAL:
 			pr_debug("peripheral bus suspend\n");
 			if (!(motg->caps & ALLOW_LPM_ON_DEV_SUSPEND))
 				break;
 			set_bit(A_BUS_SUSPEND, &motg->inputs);
-			queue_work(motg->wq, &motg->sm_work);
+			if (!atomic_read(&motg->in_lpm))
+				queue_work(system_nrt_wq, &motg->sm_work);
 			break;
 
 		default:
@@ -726,20 +730,29 @@ static int msm_otg_set_suspend(struct usb_phy *phy, int suspend)
 		}
 	} else {
 		switch (phy->state) {
+		case OTG_STATE_A_WAIT_BCON:
+			/* Remote wakeup or resume */
+			set_bit(A_BUS_REQ, &motg->inputs);
+			/* ensure hardware is not in low power mode */
+			if (atomic_read(&motg->in_lpm))
+				pm_runtime_resume(phy->dev);
+			break;
 		case OTG_STATE_A_SUSPEND:
 			/* Remote wakeup or resume */
 			set_bit(A_BUS_REQ, &motg->inputs);
 			phy->state = OTG_STATE_A_HOST;
 
 			/* ensure hardware is not in low power mode */
-			pm_runtime_resume(phy->dev);
+			if (atomic_read(&motg->in_lpm))
+				pm_runtime_resume(phy->dev);
 			break;
 		case OTG_STATE_B_PERIPHERAL:
 			pr_debug("peripheral bus resume\n");
 			if (!(motg->caps & ALLOW_LPM_ON_DEV_SUSPEND))
 				break;
 			clear_bit(A_BUS_SUSPEND, &motg->inputs);
-			queue_work(motg->wq, &motg->sm_work);
+			if (atomic_read(&motg->in_lpm))
+				queue_work(system_nrt_wq, &motg->sm_work);
 			break;
 		default:
 			break;
@@ -1041,13 +1054,26 @@ skip_phy_resume:
 
 static int msm_otg_notify_host_mode(struct msm_otg *motg, bool host_mode)
 {
+	int ret;
+
 	if (!psy)
 		goto psy_not_supported;
 
-	if (host_mode)
-		power_supply_set_scope(psy, POWER_SUPPLY_SCOPE_SYSTEM);
-	else
-		power_supply_set_scope(psy, POWER_SUPPLY_SCOPE_DEVICE);
+	if (host_mode) {
+		ret = power_supply_set_scope(psy, POWER_SUPPLY_SCOPE_SYSTEM);
+	} else {
+		ret = power_supply_set_scope(psy, POWER_SUPPLY_SCOPE_DEVICE);
+		/*
+		 * VBUS comparator is disabled by PMIC charging driver
+		 * when SYSTEM scope is selected.  For ID_GND->ID_A
+		 * transition, give 50 msec delay so that PMIC charger
+		 * driver detect the VBUS and ready for accepting
+		 * charging current value from USB.
+		 */
+		if (test_bit(ID_A, &motg->inputs))
+			msleep(50);
+	}
+	return ret;
 
 psy_not_supported:
 	dev_dbg(motg->phy.dev, "Power Supply doesn't support USB charger\n");
@@ -1072,12 +1098,7 @@ static int msm_otg_notify_chg_type(struct msm_otg *motg)
 		motg->chg_type == USB_ACA_C_CHARGER))
 		charger_type = POWER_SUPPLY_TYPE_USB_ACA;
 	else
-		charger_type = POWER_SUPPLY_TYPE_BATTERY;
-
-	if (!psy) {
-		pr_err("No USB power supply registered!\n");
-		return -EINVAL;
-	}
+		charger_type = POWER_SUPPLY_TYPE_UNKNOWN;
 
 	pr_debug("setting usb power supply type %d\n", charger_type);
 	power_supply_set_supply_type(psy, charger_type);
@@ -2118,26 +2139,8 @@ static void msm_chg_recheck_stop_work(struct work_struct *w)
 		cancel_delayed_work_sync(&motg->chg_work);
 }
 
-static void msm_otg_stop_recheck_chgtype(struct usb_phy *phy)
-{
-	struct msm_otg *motg = container_of(phy, struct msm_otg, phy);
-
-	/*
-	 * This function can be called from interrupt context.
-	 * Calling cancel_delayed_work from interrupt context is dangerous
-	 * and it will cause runtime warning.
-	 * So use schedule_work to stop recheck work.
-	 */
-	schedule_work(&motg->chg_recheck_stop_work);
-}
-
-#ifndef PORTSC_LS
-#define PORTSC_LS (3 << 10) /* Port's Line status */
-#endif
-#define MSM_CHG_RECHECK_POLL_TIME	(1000 * HZ/1000) /* 1 sec */
-#define MSM_CHG_RECHECK_MAX_RETRIES	5
-#define MSM_CHG_DCD_POLL_TIME		(100 * HZ/1000) /* 100 msec */
-#define MSM_CHG_DCD_MAX_RETRIES		6 /* Tdcd_tmout = 6 * 100 msec */
+#define MSM_CHG_DCD_TIMEOUT		(750 * HZ/1000) /* 750 msec */
+#define MSM_CHG_DCD_POLL_TIME		(50 * HZ/1000) /* 50 msec */
 #define MSM_CHG_PRIMARY_DET_TIME	(50 * HZ/1000) /* TVDPSRC_ON */
 #define MSM_CHG_SECONDARY_DET_TIME	(50 * HZ/1000) /* TVDMSRC_ON */
 static void msm_chg_detect_work(struct work_struct *w)
@@ -2162,7 +2165,7 @@ static void msm_chg_detect_work(struct work_struct *w)
 			msm_chg_enable_dcd(motg);
 		msm_chg_enable_aca_det(motg);
 		motg->chg_state = USB_CHG_STATE_WAIT_FOR_DCD;
-		motg->dcd_retries = 0;
+		motg->dcd_time = 0;
 		delay = MSM_CHG_DCD_POLL_TIME;
 		break;
 	case USB_CHG_STATE_WAIT_FOR_DCD:
@@ -2186,9 +2189,9 @@ static void msm_chg_detect_work(struct work_struct *w)
 				break;
 			}
 		}
-		if (motg->pdata->enable_dcd)
-			is_dcd = msm_chg_check_dcd(motg);
-		tmout = ++motg->dcd_retries == MSM_CHG_DCD_MAX_RETRIES;
+		is_dcd = msm_chg_check_dcd(motg);
+		motg->dcd_time += MSM_CHG_DCD_POLL_TIME;
+		tmout = motg->dcd_time >= MSM_CHG_DCD_TIMEOUT;
 		if (is_dcd || tmout) {
 			if (motg->pdata->enable_dcd)
 				msm_chg_disable_dcd(motg);
@@ -2455,9 +2458,13 @@ static void msm_otg_sm_work(struct work_struct *w)
 						OTG_STATE_B_PERIPHERAL;
 					break;
 				case USB_SDP_CHARGER:
-					msm_otg_start_peripheral(otg, 1);
-					otg->phy->state =
-						OTG_STATE_B_PERIPHERAL;
+					if(!slimport_is_connected()) {
+						msm_otg_start_peripheral(otg, 1);
+						otg->phy->state =
+							OTG_STATE_B_PERIPHERAL;
+					}
+					schedule_delayed_work(&motg->check_ta_work,
+						MSM_CHECK_TA_DELAY);
 					break;
 				default:
 					break;
@@ -2479,7 +2486,6 @@ static void msm_otg_sm_work(struct work_struct *w)
 		} else {
 			pr_debug("chg_work cancel");
 			clear_bit(A_BUS_REQ, &motg->inputs);
-			cancel_work_sync(&motg->chg_recheck_stop_work);
 			cancel_delayed_work_sync(&motg->chg_work);
 			motg->chg_state = USB_CHG_STATE_UNDEFINED;
 			motg->chg_type = USB_INVALID_CHARGER;
@@ -3236,9 +3242,6 @@ static void msm_pmic_id_status_w(struct work_struct *w)
 	struct msm_otg *motg = container_of(w, struct msm_otg,
 						pmic_id_status_work.work);
 	int work = 0;
-
-	if (aca_id_turned_on)
-		return;
 
 	if (msm_otg_read_pmic_id_state(motg)) {
 		if (!test_and_set_bit(ID, &motg->inputs)) {

@@ -1,5 +1,4 @@
-/* Copyright (c) 2009-2013, Code Aurora Forum. All rights reserved.
- * Copyright (C) 2013 Sony Mobile Communications AB.
+/* Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -166,6 +165,8 @@ struct msm_rotator_dev {
 	#ifdef CONFIG_MSM_BUS_SCALING
 	uint32_t bus_client_handle;
 	#endif
+	u32 sec_mapped;
+	u32 mmu_clk_on;
 };
 
 #define COMPONENT_5BITS 1
@@ -178,6 +179,16 @@ enum {
 	CLK_EN,
 	CLK_DIS,
 	CLK_SUSPEND,
+};
+struct res_mmu_clk {
+	char *mmu_clk_name;
+	struct clk *mmu_clk;
+};
+
+static struct res_mmu_clk rot_mmu_clks[] = {
+	{"mdp_iommu_clk"}, {"rot_iommu_clk"},
+	{"vcodec_iommu0_clk"}, {"vcodec_iommu1_clk"},
+	{"smmu_iface_clk"}
 };
 
 int msm_rotator_iommu_map_buf(int mem_id, int domain,
@@ -1386,6 +1397,87 @@ static u32 msm_rotator_set_perf_level(u32 wh, u32 is_rgb)
 
 }
 
+static int rot_enable_iommu_clocks(struct msm_rotator_dev *rot_dev)
+{
+	int ret = 0, i;
+	if (rot_dev->mmu_clk_on)
+		return 0;
+	for (i = 0; i < ARRAY_SIZE(rot_mmu_clks); i++) {
+		rot_mmu_clks[i].mmu_clk = clk_get(&msm_rotator_dev->pdev->dev,
+			rot_mmu_clks[i].mmu_clk_name);
+		if (IS_ERR(rot_mmu_clks[i].mmu_clk)) {
+			pr_err(" %s: Get failed for clk %s", __func__,
+				   rot_mmu_clks[i].mmu_clk_name);
+			ret = PTR_ERR(rot_mmu_clks[i].mmu_clk);
+			break;
+		}
+		ret = clk_prepare_enable(rot_mmu_clks[i].mmu_clk);
+		if (ret) {
+			clk_put(rot_mmu_clks[i].mmu_clk);
+			rot_mmu_clks[i].mmu_clk = NULL;
+		}
+	}
+	if (ret) {
+		for (i--; i >= 0; i--) {
+			clk_disable_unprepare(rot_mmu_clks[i].mmu_clk);
+			clk_put(rot_mmu_clks[i].mmu_clk);
+			rot_mmu_clks[i].mmu_clk = NULL;
+		}
+	} else {
+		rot_dev->mmu_clk_on = 1;
+	}
+	return ret;
+}
+
+static int rot_disable_iommu_clocks(struct msm_rotator_dev *rot_dev)
+{
+	int i;
+	if (!rot_dev->mmu_clk_on)
+		return 0;
+	for (i = 0; i < ARRAY_SIZE(rot_mmu_clks); i++) {
+		clk_disable_unprepare(rot_mmu_clks[i].mmu_clk);
+		clk_put(rot_mmu_clks[i].mmu_clk);
+		rot_mmu_clks[i].mmu_clk = NULL;
+	}
+	rot_dev->mmu_clk_on = 0;
+	return 0;
+}
+
+static int map_sec_resource(struct msm_rotator_dev *rot_dev)
+{
+	int ret = 0;
+	if (rot_dev->sec_mapped)
+		return 0;
+
+	ret = rot_enable_iommu_clocks(rot_dev);
+	if (ret) {
+		pr_err("IOMMU clock enabled failed while open");
+		return ret;
+	}
+	ret = msm_ion_secure_heap(ION_HEAP(ION_CP_MM_HEAP_ID));
+	if (ret)
+		pr_err("ION heap secure failed heap id %d ret %d\n",
+			   ION_CP_MM_HEAP_ID, ret);
+	else
+		rot_dev->sec_mapped = 1;
+	rot_disable_iommu_clocks(rot_dev);
+	return ret;
+}
+
+static int unmap_sec_resource(struct msm_rotator_dev *rot_dev)
+{
+	int ret = 0;
+	ret = rot_enable_iommu_clocks(rot_dev);
+	if (ret) {
+		pr_err("IOMMU clock enabled failed while close\n");
+		return ret;
+	}
+	msm_ion_unsecure_heap(ION_HEAP(ION_CP_MM_HEAP_ID));
+	rot_dev->sec_mapped = 0;
+	rot_disable_iommu_clocks(rot_dev);
+	return ret;
+}
+
 static int msm_rotator_start(unsigned long arg,
 			     struct msm_rotator_fd_info *fd_info)
 {
@@ -1397,7 +1489,6 @@ static int msm_rotator_start(unsigned long arg,
 	unsigned int dst_w, dst_h;
 	unsigned int is_planar420 = 0;
 	int fast_yuv_en = 0;
-	u32 perf_level;
 
 	if (copy_from_user(&info, (void __user *)arg, sizeof(info)))
 		return -EFAULT;
@@ -1431,39 +1522,22 @@ static int msm_rotator_start(unsigned long arg,
 	switch (info.src.format) {
 	case MDP_Y_CB_CR_H2V2:
 	case MDP_Y_CR_CB_H2V2:
-	/* To support Movie Studio, the following line needs to be removed */
-	/* case MDP_Y_CR_CB_GH2V2: */
+	case MDP_Y_CR_CB_GH2V2:
 		is_planar420 = 1;
 	case MDP_Y_CBCR_H2V2:
 	case MDP_Y_CRCB_H2V2:
 	case MDP_Y_CRCB_H2V2_TILE:
 	case MDP_Y_CBCR_H2V2_TILE:
-		if (rotator_hw_revision >= ROTATOR_REVISION_V2) {
-
-			if (!info.downscale_ratio) {
-				fast_yuv_en = !fast_yuv_invalid_size_checker(
-							     info.rotations,
-							     info.src.width,
-							     dst_w,
-							     dst_h,
-							     dst_w,
-							     is_planar420);
-			} else if ((info.src.width == 1920) &&
-				   (info.downscale_ratio == 1) &&
-				   (!info.rotations)) {
-				/*
-				 * Also allow fast_yuv when down scaling
-				 * 1080p to 720p without rotations
-				 */
-				fast_yuv_en = !fast_yuv_invalid_size_checker(
-							     info.rotations,
-							     info.src.width,
-							     info.dst.width,
-							     info.dst.height,
-							     info.dst.width,
-							     is_planar420);
-			}
-		}
+		if (rotator_hw_revision >= ROTATOR_REVISION_V2 &&
+			!(info.downscale_ratio &&
+			(info.rotations & MDP_ROT_90)))
+			fast_yuv_en = !fast_yuv_invalid_size_checker(
+						info.rotations,
+						info.src.width,
+						dst_w,
+						dst_h,
+						dst_w,
+						is_planar420);
 	break;
 	default:
 		fast_yuv_en = 0;
@@ -1578,7 +1652,8 @@ static int msm_rotator_start(unsigned long arg,
 
 	if (rc == 0 && copy_to_user((void __user *)arg, &info, sizeof(info)))
 		rc = -EFAULT;
-
+	if ((rc == 0) && (info.secure))
+		map_sec_resource(msm_rotator_dev);
 rotator_start_exit:
 	mutex_unlock(&msm_rotator_dev->rotator_lock);
 
@@ -1614,6 +1689,8 @@ static int msm_rotator_finish(unsigned long arg)
 	msm_bus_scale_client_update_request(msm_rotator_dev->bus_client_handle,
 		0);
 #endif
+	if (msm_rotator_dev->sec_mapped)
+		unmap_sec_resource(msm_rotator_dev);
 	mutex_unlock(&msm_rotator_dev->rotator_lock);
 	return rc;
 }
@@ -1961,7 +2038,11 @@ static int __devexit msm_rotator_remove(struct platform_device *plat_dev)
 	int i;
 
 #ifdef CONFIG_MSM_BUS_SCALING
-	msm_bus_scale_unregister_client(msm_rotator_dev->bus_client_handle);
+	if (msm_rotator_dev->bus_client_handle) {
+		msm_bus_scale_unregister_client
+			(msm_rotator_dev->bus_client_handle);
+		msm_rotator_dev->bus_client_handle = 0;
+	}
 #endif
 	free_irq(msm_rotator_dev->irq, NULL);
 	mutex_destroy(&msm_rotator_dev->rotator_lock);

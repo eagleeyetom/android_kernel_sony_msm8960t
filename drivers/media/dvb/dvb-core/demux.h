@@ -7,7 +7,7 @@
  * Copyright (c) 2000 Nokia Research Center
  *                    Tampere, FINLAND
  *
- * Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License
@@ -99,6 +99,9 @@ struct dmx_data_ready {
 			int disc_indicator_set;
 			int pes_length_mismatch;
 			u64 stc;
+			u32 tei_counter;
+			u32 cont_err_counter;
+			u32 ts_packets_num;
 		} pes_end;
 
 		struct {
@@ -187,6 +190,10 @@ struct dmx_ts_feed {
 			dmx_ts_data_ready_cb callback);
 	int (*notify_data_read)(struct dmx_ts_feed *feed,
 			u32 bytes_num);
+	int (*set_tsp_out_format)(struct dmx_ts_feed *feed,
+				enum dmx_tsp_format_t tsp_format);
+	int (*set_secure_mode)(struct dmx_ts_feed *feed,
+				struct dmx_secure_mode *sec_mode);
 };
 
 /*--------------------------------------------------------------------------*/
@@ -233,6 +240,8 @@ struct dmx_section_feed {
 			dmx_section_data_ready_cb callback);
 	int (*notify_data_read)(struct dmx_section_filter *filter,
 			u32 bytes_num);
+	int (*set_secure_mode)(struct dmx_section_feed *feed,
+				struct dmx_secure_mode *sec_mode);
 };
 
 /*--------------------------------------------------------------------------*/
@@ -316,6 +325,9 @@ struct dmx_demux {
 	u32 capabilities;            /* Bitfield of capability flags */
 	struct dmx_frontend* frontend;    /* Front-end connected to the demux */
 	void* priv;                  /* Pointer to private data of the API client */
+	struct data_buffer dvr_input; /* DVR input buffer */
+	struct dentry *debugfs_demux_dir; /* debugfs dir */
+
 	int (*open) (struct dmx_demux* demux);
 	int (*close) (struct dmx_demux* demux);
 	int (*write) (struct dmx_demux *demux, const char *buf, size_t count);
@@ -359,6 +371,13 @@ struct dmx_demux {
 
 	int (*get_stc) (struct dmx_demux* demux, unsigned int num,
 			u64 *stc, unsigned int *base);
+
+	int (*map_buffer) (struct dmx_demux *demux,
+			struct dmx_buffer *dmx_buffer,
+			void **priv_handle, void **mem);
+
+	int (*unmap_buffer) (struct dmx_demux *demux,
+			void *priv_handle);
 };
 
 #endif /* #ifndef __DEMUX_H */

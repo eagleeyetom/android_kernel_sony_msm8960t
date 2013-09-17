@@ -414,7 +414,6 @@ struct msmsdcc_host {
 	struct mutex clk_mutex;
 	bool pending_resume;
 	unsigned int idle_tout_ms;			/* Timeout in msecs */
-	bool pending_dpsm_reset;
 	struct msmsdcc_msm_bus_vote msm_bus_vote;
 	struct device_attribute	max_bus_bw;
 	struct device_attribute	polling;
@@ -426,8 +425,6 @@ struct msmsdcc_host {
 #define MSMSDCC_VERSION_STEP_MASK	0x0000FFFF
 #define MSMSDCC_VERSION_MINOR_MASK	0x0FFF0000
 #define MSMSDCC_VERSION_MINOR_SHIFT	16
-#define MSMSDCC_VERSION_MAJOR_MASK	0xF0000000
-#define MSMSDCC_VERSION_MAJOR_SHIFT	28
 #define MSMSDCC_DMA_SUP	(1 << 0)
 #define MSMSDCC_SPS_BAM_SUP	(1 << 1)
 #define MSMSDCC_SOFT_RESET	(1 << 2)
@@ -471,7 +468,7 @@ static inline void set_default_hw_caps(struct msmsdcc_host *host)
 
 	step = version & MSMSDCC_VERSION_STEP_MASK;
 	minor = (version & MSMSDCC_VERSION_MINOR_MASK) >>
-			MSMSDCC_VERSION_MINOR_SHIFT;
+		MSMSDCC_VERSION_MINOR_SHIFT;
 
 	if (version) /* SDCC v4 and greater */
 		host->hw_caps |= MSMSDCC_AUTO_PROG_DONE |
@@ -480,10 +477,11 @@ static inline void set_default_hw_caps(struct msmsdcc_host *host)
 			| MSMSDCC_AUTO_CMD19;
 
 	if ((step == 0x18) && (minor >= 3))
-		host->hw_caps |= MSMSDCC_AUTO_CMD21;
+		/* Version 0x06000018 need hard reset on errors */
+		host->hw_caps &= ~MSMSDCC_SOFT_RESET;
 
-	if (version >= 0x2b) /* SDCC v4 2.1.0 and greater */
-		host->hw_caps |= MSMSDCC_SW_RST | MSMSDCC_AUTO_CMD21;
+	if (step >= 0x2b) /* SDCC v4 2.1.0 and greater */
+		host->hw_caps |= MSMSDCC_SW_RST | MSMSDCC_SW_RST_CFG;
 }
 
 int msmsdcc_set_pwrsave(struct mmc_host *mmc, int pwrsave);
