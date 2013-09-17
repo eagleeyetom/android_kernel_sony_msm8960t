@@ -3260,6 +3260,9 @@ static int msmfb_overlay_play(struct fb_info *info, unsigned long *argp)
 	if (info->node == 0 && (mfd->cont_splash_done)) /* primary */
 		mdp_free_splash_buffer(mfd);
 
+	if (info->node == 0 && (mfd->cont_splash_done)) /* primary */
+		mdp_free_splash_buffer(mfd);
+
 	return ret;
 }
 

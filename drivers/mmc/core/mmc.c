@@ -1343,9 +1343,6 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 			if (card->bkops_info.host_delay_ms)
 				card->bkops_info.delay_ms =
 					card->bkops_info.host_delay_ms;
-
-			card->bkops_info.min_sectors_to_queue_delayed_work =
-				BKOPS_MIN_SECTORS_TO_QUEUE_DELAYED_WORK;
 		}
 	}
 
@@ -1481,13 +1478,14 @@ static int mmc_suspend(struct mmc_host *host)
 	BUG_ON(!host->card);
 
 	mmc_claim_host(host);
-	mmc_save_ios(host);
-	/*
-	 * Prefer CMD5 sleep/awake over PON to get faster response after sleep.
-	 * Some cards are known to have problems waking after sleep in HS200
-	 * mode, so we use PON in this case if available.
-	 */
-	if (mmc_card_can_sleep(host) && !mmc_card_hs200(host->card))
+
+	err = mmc_cache_ctrl(host, 0);
+	if (err)
+		goto out;
+
+	if (mmc_can_poweroff_notify(host->card))
+		err = mmc_poweroff_notify(host->card, EXT_CSD_POWER_OFF_SHORT);
+	else if (mmc_card_can_sleep(host))
 		err = mmc_card_sleep(host);
 		if (!err)
 			mmc_card_set_sleep(host->card);
@@ -1496,8 +1494,9 @@ static int mmc_suspend(struct mmc_host *host)
 	else if (!mmc_host_is_spi(host))
 		mmc_deselect_cards(host);
 	host->card->state &= ~(MMC_STATE_HIGHSPEED | MMC_STATE_HIGHSPEED_200);
-	mmc_release_host(host);
 
+out:
+	mmc_release_host(host);
 	return err;
 }
 
