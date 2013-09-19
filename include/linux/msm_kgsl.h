@@ -9,7 +9,7 @@
  */
 
 #define KGSL_VERSION_MAJOR        3
-#define KGSL_VERSION_MINOR        11
+#define KGSL_VERSION_MINOR        14
 
 /*context flags */
 #define KGSL_CONTEXT_SAVE_GMEM		  0x00000001
@@ -104,6 +104,9 @@
 #define KGSL_CLK_MEM	0x00000008
 #define KGSL_CLK_MEM_IFACE 0x00000010
 #define KGSL_CLK_AXI	0x00000020
+
+/* Server Side Sync Timeout in milliseconds */
+#define KGSL_SYNCOBJ_SERVER_TIMEOUT 2000
 
 /*
  * Reset status values for context
@@ -364,8 +367,7 @@ struct kgsl_map_user_mem {
 	unsigned int offset;
 	unsigned int hostptr;   /*input param */
 	enum kgsl_user_mem_type memtype;
-	unsigned int reserved;	/* May be required to add
-				params for another mem type */
+	unsigned int flags;
 };
 
 #define IOCTL_KGSL_MAP_USER_MEM \
@@ -526,7 +528,8 @@ struct kgsl_cff_syncmem {
 
 /*
  * A timestamp event allows the user space to register an action following an
- * expired timestamp.
+ * expired timestamp. Note IOCTL_KGSL_TIMESTAMP_EVENT has been redefined to
+ * _IOWR to support fences which need to return a fd for the priv parameter.
  */
 
 struct kgsl_timestamp_event {
@@ -537,7 +540,7 @@ struct kgsl_timestamp_event {
 	size_t len;              /* Size of the event specific blob */
 };
 
-#define IOCTL_KGSL_TIMESTAMP_EVENT \
+#define IOCTL_KGSL_TIMESTAMP_EVENT_OLD \
 	_IOW(KGSL_IOC_TYPE, 0x31, struct kgsl_timestamp_event)
 
 /* A genlock timestamp event releases an existing lock on timestamp expire */
@@ -546,6 +549,14 @@ struct kgsl_timestamp_event {
 
 struct kgsl_timestamp_event_genlock {
 	int handle; /* Handle of the genlock lock to release */
+};
+
+/* A fence timestamp event releases an existing lock on timestamp expire */
+
+#define KGSL_TIMESTAMP_EVENT_FENCE 2
+
+struct kgsl_timestamp_event_fence {
+	int fence_fd; /* Fence to signal */
 };
 
 /*
