@@ -576,12 +576,6 @@ struct mdp_buf_sync {
 	int *retire_fen_fd;
 };
 
-struct msmfb_metadata {
-	uint32_t op;
-	uint32_t flags;
-	uint32_t wait_for_finish;
-	struct fb_var_screeninfo var;
-};
 struct mdp_page_protection {
 	uint32_t page_protection;
 };
@@ -614,8 +608,6 @@ enum {
 	MDP_WRITEBACK_MIRROR_PAUSE,
 	MDP_WRITEBACK_MIRROR_RESUME,
 };
-
-#ifdef __KERNEL__
 
 #ifdef __KERNEL__
 int msm_fb_get_iommu_domain(void);
