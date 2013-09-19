@@ -58,27 +58,6 @@ struct diag_log_event_stats {
 	int is_set;
 };
 
-/* This is used for querying DCI Log
-   or Event Mask */
-struct diag_log_event_stats {
-	uint16_t code;
-	int is_set;
-};
-
-/* This is used for querying DCI Log
-   or Event Mask */
-struct diag_log_event_stats {
-	uint16_t code;
-	int is_set;
-};
-
-/* This is used for querying DCI Log
-   or Event Mask */
-struct diag_log_event_stats {
-	uint16_t code;
-	int is_set;
-};
-
 enum {
 	DIAG_DCI_NO_ERROR = 1001,	/* No error */
 	DIAG_DCI_NO_REG,		/* Could not register */
