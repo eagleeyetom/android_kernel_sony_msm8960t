@@ -1,5 +1,4 @@
 /*
- * include/linux/ion.h
  *
  * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *

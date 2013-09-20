@@ -12,7 +12,7 @@
  */
 #include <linux/err.h>
 #include <linux/io.h>
-#include <linux/ion.h>
+#include <linux/msm_ion.h>
 #include <linux/mm.h>
 #include <linux/highmem.h>
 #include <linux/scatterlist.h>
@@ -20,6 +20,7 @@
 #include <linux/vmalloc.h>
 #include <linux/iommu.h>
 #include <linux/pfn.h>
+#include <linux/dma-mapping.h>
 #include "ion_priv.h"
 
 #include <asm/mach/map.h>
@@ -335,9 +336,6 @@ int ion_iommu_heap_map_user(struct ion_heap *heap, struct ion_buffer *buffer,
 		if (addr >= vma->vm_end)
 			return 0;
 	}
-	if (!buffer->vma_inserted)
-		buffer->vma_inserted = 1;
-
 	return 0;
 }
 
